@@ -2,16 +2,21 @@
 
 #include "unit2.hpp"
 
-template <typename T>
-using newton = unit<T, scale<>, meter<>, second<-2>, kilogram<>>;
+using kelvin = unit<double, scale<>, si::meter<>>;
+using degree = unit<double, scale<2, 1, 273>, si::meter<>>;
+
+using second = unit<double, scale<>, si::second<>>;
+using minute = unit<double, scale<60>, si::second<>>;
 
 int main() {
-    unit<int, scale<>, ampere<>, meter<2, 4>, second<>> b{2};
-    unit<int, scale<>, ampere<>, meter<1, 2>, second<>> k{3};
+    kelvin a{0};
+    degree b{1};
 
-    // int i = newton<int>{};
+    a + b;
 
-    std::cout << b + k << std::endl;
+    // int i = b;
+
+    std::cout << (a + b).get() << std::endl;
 
     return 0;
 }

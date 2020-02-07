@@ -1,9 +1,10 @@
 #include <cstdint>
 #include <ratio>
+#include <stdexcept>
 #include <type_traits>
 
-template <typename...>
-struct list {};
+template <typename T>
+concept Arithmetic = std::is_arithmetic_v<T>;
 
 ///////////////////////////// STR ///////////////////////////////
 
@@ -101,7 +102,45 @@ struct scale_equal<scale<Il...>, scale<Ir...>> {
 template <Scale A, Scale B>
 inline constexpr bool scale_equal_v = detail::scale_equal<A, B>::value;
 
-//////////////////////////////   Dimension  ///////////////////////////////////
+// value_b = s::fact * value_s + s::ofst
+// value_b = k::fact * value_k + k::ofst
+//
+// k::fact * value_k + k::ofst = s::fact * value_s + s::ofst
+// k::fact * value_k = s::fact * value_s + (s::ofst - k::ofst)
+//
+// value_k = s::fact / k::fact * value_s + (s::ofst - k::ofst) / k::fact
+//
+// value_t = f::fact / t::fact * value_f + (f::ofst - t::ofst) / t::fact
+//
+// Could be generalised to arbitrary scale<...> !
+
+template <Scale From, Scale To, Arithmetic T>
+inline constexpr T convert(T x) {
+    using fact = std::ratio_divide<typename From::fact, typename To::fact>;
+
+    using ofst = std::ratio_divide<
+        std::ratio_subtract<typename From::ofst, typename To::ofst>,
+        typename To::fact>;
+
+    if constexpr (std::ratio_equal_v<ofst, std::ratio<0>>) {
+        if constexpr (std::ratio_equal_v<fact, std::ratio<0>>) {
+            return x;
+        } else {
+            return static_cast<T>(fact::num) / fact::den * x;
+        }
+    } else {
+        if constexpr (std::ratio_equal_v<fact, std::ratio<0>>) {
+            return x + static_cast<T>(ofst::num) / ofst::den;
+        } else {
+            return static_cast<T>(fact::num) / fact::den * x +
+                   static_cast<T>(ofst::num) / ofst::den;
+        }
+    }
+
+    // return std::ratio_divide<typename _R1, typename _R2>
+}
+
+//////////////////////////////   Dimension ////////////////////////////////////
 
 template <std::intmax_t... Is>
 struct DimensionBase;
@@ -126,6 +165,32 @@ concept Dimension = requires {
     typename T::exp;
     T::symbol;
 };
+
+/////////////////////////// SI base units   ////////////////////////////
+
+namespace si {
+
+template <std::intmax_t... Is>
+struct meter : DimensionBase<Is...> {
+    static constexpr str_const symbol = "m";
+};
+
+template <std::intmax_t... Is>
+struct second : DimensionBase<Is...> {
+    static constexpr str_const symbol = "s";
+};
+
+template <std::intmax_t... Is>
+struct kilogram : DimensionBase<Is...> {
+    static constexpr str_const symbol = "kg";
+};
+
+template <std::intmax_t... Is>
+struct ampere : DimensionBase<Is...> {
+    static constexpr str_const symbol = "A";
+};
+
+}  // namespace si
 
 //////////////////////////// UNIT  //////////////////////////////
 
@@ -152,19 +217,14 @@ constexpr bool ordered(Dims... dims) {
         return ordered_impl(dims...);
 }
 
-template <typename T>
-concept Arithmetic = std::is_arithmetic_v<T>;
-
+// value_in_base = s::fact * value + s::ofst
 template <Arithmetic T, Scale S, Dimension... Dims>
     requires ordered(Dims{}...) && (... && (Dims::exp::num != 0)) struct unit {
-    using dimension = list<Dims...>;
-    using scale = S;
     using value_type = T;
 
     value_type value;
 
-    inline constexpr value_type get_raw() const { return value; }
-    inline constexpr value_type get_natural() const { return value; }
+    inline constexpr value_type get() const { return value; }
 };
 
 template <typename>
@@ -178,65 +238,48 @@ concept Unit = is_unit<T>::value;
 
 ///////////////////////////  operators ////////////////////////////
 
-namespace detail {
+// template <typename, typename>
+// struct equivilant : std::false_type {};
+
+// template <template <std::intmax_t...> typename Dim, std::intmax_t... Il,
+//           std::intmax_t... Ir>
+// struct equivilant<Dim<Il...>, Dim<Ir...>> {
+//     static constexpr bool value =
+//         std::ratio_equal_v<typename Dim<Il...>::exp, typename
+//         Dim<Ir...>::exp>;
+// };
 
 template <typename, typename>
-struct same : std::false_type {};
+struct same_dimension : std::false_type {};
 
 template <template <std::intmax_t...> typename Dim, std::intmax_t... Il,
           std::intmax_t... Ir>
-struct same<Dim<Il...>, Dim<Ir...>> {
-    static constexpr bool value =
-        std::ratio_equal_v<typename Dim<Il...>::exp, typename Dim<Ir...>::exp>;
+struct same_dimension<Dim<Il...>, Dim<Ir...>> {
+    static constexpr bool value = true;
 };
 
-// template <typename, typename>
-// struct equivilant_dimensions;
-
-// template <Arithmetic Tl, Scale Sl, Dimension... Dl, Arithmetic Tr, Scale Sr,
-//           Dimension... Dr>
-// struct equivilant_dimensions<unit<Tl, Sl, Dl...>, unit<Tr, Sr, Dr...>> {
-//     static constexpr bool value = std::conjunction_v<same<Dl, Dr>...>;
-// };
-
-}  // namespace detail
-
-// template <typename A, typename B>
-// inline constexpr bool equivilant_dimensions_v =
-//     detail::equivilant_dimensions<A, B>::value;
+template <Dimension A, Dimension B>
+struct equivilant {
+    static constexpr bool value =
+        same_dimension<A, B>::value &&
+        std::ratio_equal_v<typename A::exp, typename B::exp>;
+};
 
 template <Arithmetic Tl, Scale Sl, Dimension... Dl, Arithmetic Tr, Scale Sr,
           Dimension... Dr>
 constexpr inline auto operator+(
     unit<Tl, Sl, Dl...> lhs,
     unit<Tr, Sr, Dr...>
-        rhs) requires std::conjunction_v<detail::same<Dl, Dr>...> {
+        rhs) requires std::conjunction_v<equivilant<Dl, Dr>...> {
     if constexpr (scale_equal_v<Sl, Sr>) {
-        // unit<decltype(lhs.value + rhs.value), Sl, Dl>
-        return 0;
+        return unit<decltype(lhs.get() + rhs.get()), Sl, Dl...>{lhs.get() +
+                                                                rhs.get()};
     } else {
-        return 1;
+        return unit<decltype(lhs.get() + rhs.get()), Sl, Dl...>{
+            lhs.get() + convert<Sr, Sl>(rhs.get())};
     }
 }
 
-/////////////////////////// SI base units   ////////////////////////////
-
-template <std::intmax_t... Is>
-struct meter : DimensionBase<Is...> {
-    static constexpr str_const symbol = "m";
-};
-
-template <std::intmax_t... Is>
-struct second : DimensionBase<Is...> {
-    static constexpr str_const symbol = "s";
-};
-
-template <std::intmax_t... Is>
-struct kilogram : DimensionBase<Is...> {
-    static constexpr str_const symbol = "kg";
-};
-
-template <std::intmax_t... Is>
-struct ampere : DimensionBase<Is...> {
-    static constexpr str_const symbol = "A";
-};
+// (A B C D, C D E F) -> (A B, C D, E F)
+// sum  middle
+// concat the 3 list
