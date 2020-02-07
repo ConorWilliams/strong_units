@@ -10,7 +10,7 @@ concept Arithmetic = std::is_arithmetic_v<T>;
 
 class str_const {
    private:
-    const char* const p_;
+    const char *const p_;
     const std::size_t sz_;
 
    public:
@@ -44,25 +44,22 @@ constexpr int str_compare(str_const a, str_const b) {
 
 ///////////////////////////// SCALE //////////////////////////////////
 
-template <typename T>
-concept Scale = requires {
-    typename T::fact;
-    typename T::ofst;
-
-    T::fact::num;
-    T::fact::den;
-
-    T::ofst::num;
-    T::ofst::den;
-};
-
 template <std::intmax_t I, std::intmax_t J, std::intmax_t K, std::intmax_t L>
 struct ScaleBase {
+    static constexpr std::intmax_t t_param[4] = {I, J, K, L};
+
     using fact = std::ratio<I, J>;
     using ofst = std::ratio<K, L>;
 
     static_assert(fact::num != 0, "Cannot have a zero scaled dimension");
+    static_assert(ofst::den >= 0, "");  // use std::ratio msg
 };
+
+template <typename T>
+concept Scale = std::is_base_of_v<
+    ScaleBase<T::t_param[0], T::t_param[1], T::t_param[2], T::t_param[3]>, T>;
+
+// Using a variadic template instead of defaulted results in shorter types
 
 template <std::intmax_t... Is>
 struct scale;
@@ -102,16 +99,6 @@ struct scale_equal<scale<Il...>, scale<Ir...>> {
 template <Scale A, Scale B>
 inline constexpr bool scale_equal_v = detail::scale_equal<A, B>::value;
 
-// value_b = s::fact * value_s + s::ofst
-// value_b = k::fact * value_k + k::ofst
-//
-// k::fact * value_k + k::ofst = s::fact * value_s + s::ofst
-// k::fact * value_k = s::fact * value_s + (s::ofst - k::ofst)
-//
-// value_k = s::fact / k::fact * value_s + (s::ofst - k::ofst) / k::fact
-//
-// value_t = f::fact / t::fact * value_f + (f::ofst - t::ofst) / t::fact
-//
 // Could be generalised to arbitrary scale<...> !
 
 template <Scale From, Scale To, Arithmetic T>
@@ -136,34 +123,50 @@ inline constexpr T convert(T x) {
                    static_cast<T>(ofst::num) / ofst::den;
         }
     }
-
-    // return std::ratio_divide<typename _R1, typename _R2>
 }
 
 //////////////////////////////   Dimension ////////////////////////////////////
+
+template <std::intmax_t I, std::intmax_t J>
+struct DimBaseBase {
+    static constexpr std::intmax_t t_param[2] = {I, J};
+    using exp = std::ratio<I, J>;
+};
+
+// Using a variadic template instead of defaulted results in shorter types
 
 template <std::intmax_t... Is>
 struct DimensionBase;
 
 template <>
-struct DimensionBase<> {
-    using exp = std::ratio<1, 1>;
-};
+struct DimensionBase<> : DimBaseBase<1, 1> {};
 
 template <std::intmax_t I>
-struct DimensionBase<I> {
-    using exp = std::ratio<I, 1>;
-};
+struct DimensionBase<I> : DimBaseBase<I, 1> {};
 
 template <std::intmax_t I, std::intmax_t J>
-struct DimensionBase<I, J> {
-    using exp = std::ratio<I, J>;
-};
+struct DimensionBase<I, J> : DimBaseBase<I, J> {};
 
 template <typename T>
-concept Dimension = requires {
-    typename T::exp;
-    T::symbol;
+concept Dimension =
+    std::is_base_of_v<DimBaseBase<T::t_param[0], T::t_param[1]>, T>;
+
+// Test if two types are specialisations of the same dimension type
+
+template <typename, typename>
+struct same_dimension : std::false_type {};
+
+template <template <std::intmax_t...> typename Dim, std::intmax_t... Il,
+          std::intmax_t... Ir>
+struct same_dimension<Dim<Il...>, Dim<Ir...>> {
+    static constexpr bool value = true;
+};
+
+template <Dimension A, Dimension B>
+struct equal_dimension {
+    static constexpr bool value =
+        same_dimension<A, B>::value &&
+        std::ratio_equal_v<typename A::exp, typename B::exp>;
 };
 
 /////////////////////////// SI base units   ////////////////////////////
@@ -238,39 +241,12 @@ concept Unit = is_unit<T>::value;
 
 ///////////////////////////  operators ////////////////////////////
 
-// template <typename, typename>
-// struct equivilant : std::false_type {};
-
-// template <template <std::intmax_t...> typename Dim, std::intmax_t... Il,
-//           std::intmax_t... Ir>
-// struct equivilant<Dim<Il...>, Dim<Ir...>> {
-//     static constexpr bool value =
-//         std::ratio_equal_v<typename Dim<Il...>::exp, typename
-//         Dim<Ir...>::exp>;
-// };
-
-template <typename, typename>
-struct same_dimension : std::false_type {};
-
-template <template <std::intmax_t...> typename Dim, std::intmax_t... Il,
-          std::intmax_t... Ir>
-struct same_dimension<Dim<Il...>, Dim<Ir...>> {
-    static constexpr bool value = true;
-};
-
-template <Dimension A, Dimension B>
-struct equivilant {
-    static constexpr bool value =
-        same_dimension<A, B>::value &&
-        std::ratio_equal_v<typename A::exp, typename B::exp>;
-};
-
 template <Arithmetic Tl, Scale Sl, Dimension... Dl, Arithmetic Tr, Scale Sr,
           Dimension... Dr>
 constexpr inline auto operator+(
     unit<Tl, Sl, Dl...> lhs,
     unit<Tr, Sr, Dr...>
-        rhs) requires std::conjunction_v<equivilant<Dl, Dr>...> {
+        rhs) requires std::conjunction_v<equal_dimension<Dl, Dr>...> {
     if constexpr (scale_equal_v<Sl, Sr>) {
         return unit<decltype(lhs.get() + rhs.get()), Sl, Dl...>{lhs.get() +
                                                                 rhs.get()};
@@ -280,6 +256,91 @@ constexpr inline auto operator+(
     }
 }
 
-// (A B C D, C D E F) -> (A B, C D, E F)
-// sum  middle
-// concat the 3 list
+// lightweight list type required to separate dimension parameter packs in merge
+template <Dimension... Dims>
+struct list {
+    static constexpr std::size_t size = sizeof...(Dims);
+};
+
+template <std::size_t, Dimension, typename>
+struct find;
+
+template <std::size_t N, Dimension Find>
+struct find<N, Find, list<>> {
+    static constexpr std::size_t value = N;
+};
+
+template <std::size_t N, Dimension Find, Dimension Head, Dimension... Tail>
+struct find<N, Find, list<Head, Tail...>> {
+   private:
+    static constexpr bool found = same_dimension<Find, Head>::value;
+
+   public:
+    static constexpr std::size_t value =
+        found ? N : find<N + 1, Find, list<Tail...>>::value;
+};
+
+template <typename, typename>
+struct concat;
+
+template <Dimension... Head, Dimension... Tail>
+struct concat<list<Head...>, list<Tail...>> {
+    using type = list<Head..., Tail...>;
+};
+
+template <typename A, typename B>
+using concat_t = concat<A, B>::type;
+
+namespace detail {
+
+template <std::size_t N, typename List, Dimension Head, Dimension... Tail>
+constexpr auto head(List l, list<Head, Tail...> tail) {
+    if constexpr (List::size == N) {
+        return l;
+    } else if constexpr (List::size == N - 1) {
+        return concat_t<List, list<Head>>{};
+    } else {
+        return head<N>(concat_t<List, list<Head>>{}, list<Tail...>{});
+    }
+}
+
+}  // namespace detail
+
+template <std::size_t N, typename List>
+    requires N <=
+    List::size using head = decltype(detail::head<N>(list<>{}, List{}));
+
+// A B C D detail::head<N, list<>, List>::type
+//     C D E F
+
+// A B
+
+//     C D
+
+//     C D E F
+
+// constexpr auto merge(list<> lhs, list<> rhs) { return list<>{}; }
+
+// template <Dimension A, Dimension... As>
+// constexpr auto merge(list<A, As...> lhs, list<> rhs) {
+//     return lhs;
+// }
+
+// template <Dimension B, Dimension... Bs>
+// constexpr auto merge(list<> lhs, list<B, Bs...> rhs) {
+//     return rhs;
+// }
+
+// template <Dimension A, Dimension... As, Dimension B, Dimension...
+// Bs> constexpr auto merge(list<A, As...> lhs, list<B, Bs...> rhs) {
+//     using f1 = find<A, B, Bs...>;
+
+//     if constexpr (f1::value) {
+//     } else {
+//         return typename concat<list<A>,
+//                                decltype(merge(list<>{},
+//                                list<>{}))>::type{};
+//     }
+// }
+
+// merge(list<As...>{}, list<B, Bs...>)
