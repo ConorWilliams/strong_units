@@ -151,28 +151,50 @@ template <typename T>
 concept Dimension =
     std::is_base_of_v<DimBaseBase<T::t_param[0], T::t_param[1]>, T>;
 
-// Test if two types are specialisations of the same dimension type
-
+// Test if two types are specialisations of the same dimension type.
 template <typename, typename>
-struct same_dimension : std::false_type {};
+struct dimension_same : std::false_type {};
 
 template <template <std::intmax_t...> typename Dim, std::intmax_t... Il,
           std::intmax_t... Ir>
-struct same_dimension<Dim<Il...>, Dim<Ir...>> {
+struct dimension_same<Dim<Il...>, Dim<Ir...>> {
     static constexpr bool value = true;
 };
 
+// Test if two types are specialisations of the same dimension type and have
+// equal exponents.
 template <Dimension A, Dimension B>
-struct equal_dimension {
+struct dimension_equal {
     static constexpr bool value =
-        same_dimension<A, B>::value &&
+        dimension_same<A, B>::value &&
         std::ratio_equal_v<typename A::exp, typename B::exp>;
 };
+
+// Adds the exponents of two dimensions (does not assert they are the same type)
+template <typename, typename>
+struct dimension_add;
+
+template <template <std::intmax_t...> typename Dim, std::intmax_t... Il,
+          Dimension O>
+struct dimension_add<Dim<Il...>, O> {
+   private:
+    using sum = std::ratio_add<typename Dim<Il...>::exp, typename O::exp>;
+
+   public:
+    using type = Dim<sum::num, sum::den>;
+};
+
+// template <typename>
+// struct dimension_simplify;
+
+// template <template <std::intmax_t...> typename Dim, std::intmax_t... Is>
+// struct dimension_simplify<Dim<Is...>> {
+//     using type = Dim<Dim<Is...>::exp::num, Dim<Is...>::exp::den>;
+// };
 
 /////////////////////////// SI base units   ////////////////////////////
 
 namespace si {
-
 template <std::intmax_t... Is>
 struct meter : DimensionBase<Is...> {
     static constexpr str_const symbol = "m";
@@ -246,7 +268,7 @@ template <Arithmetic Tl, Scale Sl, Dimension... Dl, Arithmetic Tr, Scale Sr,
 constexpr inline auto operator+(
     unit<Tl, Sl, Dl...> lhs,
     unit<Tr, Sr, Dr...>
-        rhs) requires std::conjunction_v<equal_dimension<Dl, Dr>...> {
+        rhs) requires std::conjunction_v<dimension_equal<Dl, Dr>...> {
     if constexpr (scale_equal_v<Sl, Sr>) {
         return unit<decltype(lhs.get() + rhs.get()), Sl, Dl...>{lhs.get() +
                                                                 rhs.get()};
@@ -262,6 +284,8 @@ struct list {
     static constexpr std::size_t size = sizeof...(Dims);
 };
 
+namespace detail {
+
 template <std::size_t, Dimension, typename>
 struct find;
 
@@ -273,74 +297,131 @@ struct find<N, Find, list<>> {
 template <std::size_t N, Dimension Find, Dimension Head, Dimension... Tail>
 struct find<N, Find, list<Head, Tail...>> {
    private:
-    static constexpr bool found = same_dimension<Find, Head>::value;
+    static constexpr bool found = dimension_same<Find, Head>::value;
 
    public:
     static constexpr std::size_t value =
         found ? N : find<N + 1, Find, list<Tail...>>::value;
 };
 
-template <typename, typename>
-struct concat;
+}  // namespace detail
 
-template <Dimension... Head, Dimension... Tail>
-struct concat<list<Head...>, list<Tail...>> {
-    using type = list<Head..., Tail...>;
-};
-
-template <typename A, typename B>
-using concat_t = concat<A, B>::type;
+// Find the index of the Dimension matching 'Find' else return List::size
+template <std::size_t N, Dimension Find, typename List>
+inline constexpr bool find = detail::find<N, Find, List>::value;
 
 namespace detail {
 
-template <std::size_t N, typename List, Dimension Head, Dimension... Tail>
-constexpr auto head(List l, list<Head, Tail...> tail) {
-    if constexpr (List::size == N) {
-        return l;
-    } else if constexpr (List::size == N - 1) {
-        return concat_t<List, list<Head>>{};
+template <typename, typename>
+struct concat_impl;
+
+template <Dimension Head, Dimension... Tail>
+struct concat_impl<Head, list<Tail...>> {
+    using type = list<Head, Tail...>;
+};
+
+template <Dimension... Head, Dimension Tail>
+struct concat_impl<list<Head...>, Tail> {
+    using type = list<Head..., Tail>;
+};
+
+template <Dimension... Head, Dimension... Tail>
+struct concat_impl<list<Head...>, list<Tail...>> {
+    using type = list<Head..., Tail...>;
+};
+
+}  // namespace detail
+
+// Concatenates two lists;
+template <typename A, typename B>
+using concat = detail::concat_impl<A, B>::type;
+
+// namespace detail {
+
+// template <std::size_t N, typename List, Dimension Head, Dimension... Tail>
+// constexpr auto head_impl(List x, list<Head, Tail...> tail) {
+//     if constexpr (List::size == N) {
+//         return x;
+//     } else if constexpr (List::size == N - 1) {
+//         return concat<List, list<Head>>{};
+//     } else {
+//         return head<N>(concat<List, Head>{}, list<Tail...>{});
+//     }
+// }
+
+// }  // namespace detail
+
+// // Returns a list filled with the first N elements
+// template <std::size_t N, typename List>
+//     requires N <=
+//     List::size using head = decltype(detail::head_impl<N>(list<>{}, List{}));
+
+// namespace detail {
+
+// template <std::size_t N, Dimension Head, Dimension... Tail>
+// constexpr auto tail_impl(list<Head, Tail...> x) {
+//     constexpr auto len = sizeof...(Tail) + 1;
+
+//     if constexpr (N == len) {
+//         return x;
+//     } else if constexpr (N == len - 1) {
+//         return list<Tail...>{};
+//     } else {
+//         return tail<N>(list<Tail...>{});
+//     }
+// }
+
+// }  // namespace detail
+
+// // Returns a list filled with the last N elements
+// template <std::size_t N, typename List>
+//     requires N <=
+//     List::size using tail = decltype(detail::tail_impl<N>(List{}));
+
+namespace detail {
+
+template <typename List>
+constexpr auto merge_sum_sorted_impl(list<> a, list<> b) {
+    return List{};
+}
+
+template <typename List, Dimension A, Dimension... As>
+constexpr auto merge_sum_sorted_impl(list<A, As...> a, list<> b) {
+    return concat<List, list<A, As...>>{};
+}
+
+template <typename List, Dimension B, Dimension... Bs>
+constexpr auto merge_sum_sorted_impl(list<> a, list<B, Bs...> b) {
+    return concat<List, list<B, Bs...>>{};
+}
+
+template <typename List, Dimension A, Dimension... As, Dimension B,
+          Dimension... Bs>
+constexpr auto merge_sum_sorted_impl(list<A, As...> a, list<B, Bs...> b) {
+    using a_t = list<A, As...>;
+    using b_t = list<B, Bs...>;
+
+    constexpr auto cmp = str_compare(A::symbol, B::symbol);
+
+    if constexpr (cmp < 0) {
+        return merge_sum_sorted_impl<concat<List, A>>(list<As...>{}, b);
+    } else if constexpr (cmp > 0) {
+        return merge_sum_sorted_impl<concat<List, B>>(a, list<Bs...>{});
     } else {
-        return head<N>(concat_t<List, list<Head>>{}, list<Tail...>{});
+        static_assert(dimension_same<A, B>::value,
+                      "During merge_sum found two conflicting dimensions with "
+                      "the same symbol but different types.");
+
+        return merge_sum_sorted_impl<
+            concat<List, typename dimension_add<A, B>::type>>(list<As...>{},
+                                                              list<Bs...>{});
     }
 }
 
 }  // namespace detail
 
-template <std::size_t N, typename List>
-    requires N <=
-    List::size using head = decltype(detail::head<N>(list<>{}, List{}));
-
-// A B C D detail::head<N, list<>, List>::type
-//     C D E F
-
-// A B
-
-//     C D
-
-//     C D E F
-
-// constexpr auto merge(list<> lhs, list<> rhs) { return list<>{}; }
-
-// template <Dimension A, Dimension... As>
-// constexpr auto merge(list<A, As...> lhs, list<> rhs) {
-//     return lhs;
-// }
-
-// template <Dimension B, Dimension... Bs>
-// constexpr auto merge(list<> lhs, list<B, Bs...> rhs) {
-//     return rhs;
-// }
-
-// template <Dimension A, Dimension... As, Dimension B, Dimension...
-// Bs> constexpr auto merge(list<A, As...> lhs, list<B, Bs...> rhs) {
-//     using f1 = find<A, B, Bs...>;
-
-//     if constexpr (f1::value) {
-//     } else {
-//         return typename concat<list<A>,
-//                                decltype(merge(list<>{},
-//                                list<>{}))>::type{};
-//     }
-// }
-
-// merge(list<As...>{}, list<B, Bs...>)
+// merge two sorted lists of dimensions into a new sorted list summing any
+// dimensions of the same type.
+template <typename A, typename B>
+using merge_sum_sorted =
+    decltype(detail::merge_sum_sorted_impl<list<>>(A{}, B{}));

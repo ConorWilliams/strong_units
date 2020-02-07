@@ -2,26 +2,21 @@
 
 #include "unit2.hpp"
 
-using kelvin = unit<double, scale<>, si::meter<>>;
-using degree = unit<double, scale<2, 1, 273>, si::meter<>>;
+using kelvin = unit<double, scale<>, si::meter<>, si::second<>>;
+using degree = unit<double, scale<>, si::ampere<>, si::kilogram<>>;
 
-using second = unit<double, scale<>, si::second<>>;
-using minute = unit<double, scale<1, 1, 1, 1>, si::second<1>>;
+using l1 = list<si::meter<>, si::second<>>;
+using l2 = list<si::ampere<>, si::kilogram<>>;
 
-using l = list<si::meter<>, si::second<>, si::meter<>, si::second<4>>;
-
-using t = find<0, si::second<>,
-               list<si::meter<>, si::second<>, si::meter<>, si::second<4>>>;
+using s = merge_sum_sorted<l1, l2>;
 
 int main() {
     kelvin a{0};
     degree b{1};
 
-    // a + b;
+    int i = s{};
 
-    int i = head<0, l>{};
-
-    std::cout << t::value << std::endl;
+    std::cout << 1 << std::endl;
 
     return 0;
 }
