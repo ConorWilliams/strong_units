@@ -1,10 +1,8 @@
-#include <cstdint>
-#include <ratio>
-#include <stdexcept>
-#include <string_view>
-#include <type_traits>
+#pragma once
 
-#include "meta.hpp"
+#include <cstdint>  // std::intmax_t
+#include <ratio>
+#include <type_traits>
 
 namespace sci {
 
@@ -689,6 +687,16 @@ using new_unit = make_unit_from_sorted_t<
 
 /////////////////////////// SI base units   ////////////////////////////
 
+// exported names
+using sci::scale;
+
+using sci::Unit;
+
+template <typename T, typename S, typename... Dims>
+using unit = sci::new_unit<T, S, Dims...>;
+
+using sci::convert;
+
 namespace si {
 
 // Using a variadic template instead of defaulted results in shorter types
@@ -716,12 +724,6 @@ struct candela : sci::DimensionBase<"cd", Is...> {};
 
 }  // namespace si
 
-// exported names
-using sci::scale;
-
-using sci::Unit;
-
-template <typename T, typename S, typename... Dims>
-using unit = sci::new_unit<T, S, Dims...>;
-
-using sci::convert;
+namespace units {
+using meter =
+}
