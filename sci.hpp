@@ -6,7 +6,7 @@
 
 #include "meta.hpp"
 
-namespace xu {
+namespace sci {
 
 // Lightweight list type required to separate parameter packs
 template <typename... Ts>
@@ -676,6 +676,8 @@ struct sort_impl<First, Second, Tail...> {
 template <Dimension... Dims>
 using sort_t = detail::sort_impl<list<Dims>...>::type;
 
+// makes a unit type by simplifying and sorting the dimensions and simplifying
+// the scale
 template <Arithmetic T, Scale S, Dimension... Dims>
 using new_unit = make_unit_from_sorted_t<
     T,
@@ -683,7 +685,7 @@ using new_unit = make_unit_from_sorted_t<
                  S::zero_offset::num, S::zero_offset::den>,
     sort_t<dimension_simplify_t<Dims>...>>;
 
-}  // namespace xu
+}  // namespace sci
 
 /////////////////////////// SI base units   ////////////////////////////
 
@@ -692,34 +694,34 @@ namespace si {
 // Using a variadic template instead of defaulted results in shorter types
 
 template <std::intmax_t... Is>
-struct meter : xu::DimensionBase<"m", Is...> {};
+struct meter : sci::DimensionBase<"m", Is...> {};
 
 template <std::intmax_t... Is>
-struct second : xu::DimensionBase<"s", Is...> {};
+struct second : sci::DimensionBase<"s", Is...> {};
 
 template <std::intmax_t... Is>
-struct kilogram : xu::DimensionBase<"kg", Is...> {};
+struct kilogram : sci::DimensionBase<"kg", Is...> {};
 
 template <std::intmax_t... Is>
-struct ampere : xu::DimensionBase<"A", Is...> {};
+struct ampere : sci::DimensionBase<"A", Is...> {};
 
 template <std::intmax_t... Is>
-struct kelvin : xu::DimensionBase<"K", Is...> {};
+struct kelvin : sci::DimensionBase<"K", Is...> {};
 
 template <std::intmax_t... Is>
-struct mole : xu::DimensionBase<"mol", Is...> {};
+struct mole : sci::DimensionBase<"mol", Is...> {};
 
 template <std::intmax_t... Is>
-struct candela : xu::DimensionBase<"cd", Is...> {};
+struct candela : sci::DimensionBase<"cd", Is...> {};
 
 }  // namespace si
 
 // exported names
-using xu::scale;
+using sci::scale;
 
-using xu::Unit;
+using sci::Unit;
 
 template <typename T, typename S, typename... Dims>
-using unit = xu::new_unit<T, S, Dims...>;
+using unit = sci::new_unit<T, S, Dims...>;
 
-using xu::convert;
+using sci::convert;
