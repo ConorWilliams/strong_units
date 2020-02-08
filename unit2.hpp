@@ -27,7 +27,7 @@ class str_const {
 constexpr int str_compare(str_const a, str_const b) {
     if (a.size() < b.size()) {
         return -1;
-    } else if (b.size() > a.size()) {
+    } else if (a.size() > b.size()) {
         return 1;
     } else {
         for (std::size_t i = 0; i < a.size(); ++i) {
@@ -48,11 +48,12 @@ template <std::intmax_t I, std::intmax_t J, std::intmax_t K, std::intmax_t L>
 struct ScaleBase {
     static constexpr std::intmax_t t_param[4] = {I, J, K, L};
 
-    using fact = std::ratio<I, J>;
-    using ofst = std::ratio<K, L>;
+    using scale_factor = std::ratio<I, J>;
+    using zero_offset = std::ratio<K, L>;
 
-    static_assert(fact::num != 0, "Cannot have a zero scaled dimension");
-    static_assert(ofst::den >= 0, "");  // use std::ratio msg
+    static_assert(scale_factor::num != 0,
+                  "Cannot have a zero scaled dimension");
+    static_assert(zero_offset::den >= 0, "");  // use std::ratio msg
 };
 
 template <typename T>
@@ -79,48 +80,79 @@ struct scale<I, J, K> : ScaleBase<I, J, K, 1> {};
 template <std::intmax_t I, std::intmax_t J, std::intmax_t K, std::intmax_t L>
 struct scale<I, J, K, L> : ScaleBase<I, J, K, L> {};
 
-namespace detail {
-
-template <typename, typename>
-struct scale_equal : std::false_type {};
-
-template <std::intmax_t... Il, std::intmax_t... Ir>
-struct scale_equal<scale<Il...>, scale<Ir...>> {
-    static constexpr bool value =
-        std::ratio_equal_v<typename scale<Il...>::fact,
-                           typename scale<Ir...>::fact> &&
-
-        std::ratio_equal_v<typename scale<Il...>::ofst,
-                           typename scale<Ir...>::ofst>;
+template <std::intmax_t I, std::intmax_t J, std::intmax_t K, std::intmax_t L>
+struct scale_simplify {
+    using type = scale<I, J, K, L>;
 };
 
-}  // namespace detail
+template <>
+struct scale_simplify<1, 1, 0, 1> {
+    using type = scale<>;
+};
+
+template <std::intmax_t I>
+struct scale_simplify<I, 1, 0, 1> {
+    using type = scale<I>;
+};
+
+template <std::intmax_t I, std::intmax_t J>
+struct scale_simplify<I, J, 0, 1> {
+    using type = scale<I, J>;
+};
+
+template <std::intmax_t I, std::intmax_t J, std::intmax_t K>
+struct scale_simplify<I, J, K, 1> {
+    using type = scale<I, J, K>;
+};
+
+// namespace detail {
+
+// template <typename, typename>
+// struct scale_equal : std::false_type {};
+
+// template <std::intmax_t... Il, std::intmax_t... Ir>
+// struct scale_equal<scale<Il...>, scale<Ir...>> {
+//     static constexpr bool value =
+//         std::ratio_equal_v<typename scale<Il...>::scale_factor,
+//                            typename scale<Ir...>::scale_factor> &&
+
+//         std::ratio_equal_v<typename scale<Il...>::zero_offset,
+//                            typename scale<Ir...>::zero_offset>;
+// };
+
+// }  // namespace detail
+
+// template <Scale A, Scale B>
+// inline constexpr bool scale_equal_v = detail::scale_equal<A, B>::value;
 
 template <Scale A, Scale B>
-inline constexpr bool scale_equal_v = detail::scale_equal<A, B>::value;
+concept zero_offset_equal =
+    std::ratio_equal_v<typename A::zero_offset, typename B::zero_offset>;
 
 // Could be generalised to arbitrary scale<...> !
 
 template <Scale From, Scale To, Arithmetic T>
 inline constexpr T convert(T x) {
-    using fact = std::ratio_divide<typename From::fact, typename To::fact>;
+    using scale_factor = std::ratio_divide<typename From::scale_factor,
+                                           typename To::scale_factor>;
 
-    using ofst = std::ratio_divide<
-        std::ratio_subtract<typename From::ofst, typename To::ofst>,
-        typename To::fact>;
+    using zero_offset =
+        std::ratio_divide<std::ratio_subtract<typename From::zero_offset,
+                                              typename To::zero_offset>,
+                          typename To::scale_factor>;
 
-    if constexpr (std::ratio_equal_v<ofst, std::ratio<0>>) {
-        if constexpr (std::ratio_equal_v<fact, std::ratio<0>>) {
+    if constexpr (std::ratio_equal_v<zero_offset, std::ratio<0>>) {
+        if constexpr (std::ratio_equal_v<scale_factor, std::ratio<0>>) {
             return x;
         } else {
-            return static_cast<T>(fact::num) / fact::den * x;
+            return static_cast<T>(scale_factor::num) / scale_factor::den * x;
         }
     } else {
-        if constexpr (std::ratio_equal_v<fact, std::ratio<0>>) {
-            return x + static_cast<T>(ofst::num) / ofst::den;
+        if constexpr (std::ratio_equal_v<scale_factor, std::ratio<0>>) {
+            return x + static_cast<T>(zero_offset::num) / zero_offset::den;
         } else {
-            return static_cast<T>(fact::num) / fact::den * x +
-                   static_cast<T>(ofst::num) / ofst::den;
+            return static_cast<T>(scale_factor::num) / scale_factor::den * x +
+                   static_cast<T>(zero_offset::num) / zero_offset::den;
         }
     }
 }
@@ -151,7 +183,8 @@ template <typename T>
 concept Dimension =
     std::is_base_of_v<DimBaseBase<T::t_param[0], T::t_param[1]>, T>;
 
-// Test if two types are specialisations of the same dimension type.
+namespace detail {
+
 template <typename, typename>
 struct dimension_same : std::false_type {};
 
@@ -161,28 +194,55 @@ struct dimension_same<Dim<Il...>, Dim<Ir...>> {
     static constexpr bool value = true;
 };
 
+}  // namespace detail
+
+// Test if two types are specialisations of the same dimension type.
+template <Dimension A, Dimension B>
+inline constexpr bool dimension_same_v = detail::dimension_same<A, B>::value;
+
 // Test if two types are specialisations of the same dimension type and have
 // equal exponents.
 template <Dimension A, Dimension B>
 struct dimension_equal {
     static constexpr bool value =
-        dimension_same<A, B>::value &&
+        dimension_same_v<A, B> &&
         std::ratio_equal_v<typename A::exp, typename B::exp>;
 };
 
-// Adds the exponents of two dimensions (does not assert they are the same type)
+// Returns new dimension with same type but and new exponent equal to sum of
+// std::ratio O and old dimensions exponent.
 template <typename, typename>
 struct dimension_add;
 
 template <template <std::intmax_t...> typename Dim, std::intmax_t... Il,
-          Dimension O>
+          typename O>
 struct dimension_add<Dim<Il...>, O> {
    private:
-    using sum = std::ratio_add<typename Dim<Il...>::exp, typename O::exp>;
+    using sum = std::ratio_add<typename Dim<Il...>::exp, O>;
 
    public:
-    using type = Dim<sum::num, sum::den>;
+    using type = std::conditional_t<sum::den == 1, Dim<sum::num>,
+                                    Dim<sum::num, sum::den>>;
 };
+
+// Multiplies the exponents of two dimensions (does not assert they are the same
+// type)
+template <typename, typename>
+struct dimension_multiply;
+
+template <template <std::intmax_t...> typename Dim, std::intmax_t... Il,
+          typename O>
+struct dimension_multiply<Dim<Il...>, O> {
+   private:
+    using product = std::ratio_multiply<typename Dim<Il...>::exp, O>;
+
+   public:
+    using type = std::conditional_t<product::den == 1, Dim<product::num>,
+                                    Dim<product::num, product::den>>;
+};
+
+template <Dimension D, typename Ratio>
+using dimension_multiply_t = dimension_multiply<D, Ratio>::type;
 
 // template <typename>
 // struct dimension_simplify;
@@ -242,14 +302,32 @@ constexpr bool ordered(Dims... dims) {
         return ordered_impl(dims...);
 }
 
-// value_in_base = s::fact * value + s::ofst
+// value_in_base = s::scale_factor * value + s::zero_offset
 template <Arithmetic T, Scale S, Dimension... Dims>
-    requires ordered(Dims{}...) && (... && (Dims::exp::num != 0)) struct unit {
+    requires ordered(Dims{}...) && (... && (Dims::exp::num != 0)) class unit {
+   public:
     using value_type = T;
+    using scale_type = S;
 
-    value_type value;
+    unit() = default;
+    unit(unit const &) = default;
+    unit(unit &&) = default;
 
-    inline constexpr value_type get() const { return value; }
+    unit &operator=(unit const &) = default;
+    unit &operator=(unit &&) = default;
+
+    explicit unit(value_type value) : m_value{value} {};
+
+    // template <Arithmetic OtherT, Scale OtherS, Dimension... OtherDims>
+    // unit(unit<OtherT, OtherS, OtherDims...> other) : m_value{} {}
+
+    // convert<OtherS, S>(other.get())
+    // requires std::conjunction_v<dimension_equal<Dims, OtherDims>...>
+
+    inline constexpr value_type get() const noexcept { return m_value; }
+
+   private:
+    value_type m_value;
 };
 
 template <typename>
@@ -261,54 +339,28 @@ struct is_unit<unit<T, S, Dims...>> : std::true_type {};
 template <typename T>
 concept Unit = is_unit<T>::value;
 
+template <Unit To, Unit From>
+auto convert(From x) {
+    return convert<typename From::scale_type, typename To::scale_type>(x.get());
+}
+
 ///////////////////////////  operators ////////////////////////////
 
 template <Arithmetic Tl, Scale Sl, Dimension... Dl, Arithmetic Tr, Scale Sr,
           Dimension... Dr>
-constexpr inline auto operator+(
-    unit<Tl, Sl, Dl...> lhs,
-    unit<Tr, Sr, Dr...>
-        rhs) requires std::conjunction_v<dimension_equal<Dl, Dr>...> {
-    if constexpr (scale_equal_v<Sl, Sr>) {
-        return unit<decltype(lhs.get() + rhs.get()), Sl, Dl...>{lhs.get() +
-                                                                rhs.get()};
-    } else {
-        return unit<decltype(lhs.get() + rhs.get()), Sl, Dl...>{
-            lhs.get() + convert<Sr, Sl>(rhs.get())};
-    }
+constexpr inline auto operator+(unit<Tl, Sl, Dl...> lhs,
+                                unit<Tr, Sr, Dr...> rhs) requires std::
+    conjunction_v<dimension_equal<Dl, Dr>...> &&zero_offset_equal<Sl, Sr> {
+    using value_type = decltype(lhs.get() + convert<Sr, Sl>(rhs.get()));
+
+    return unit<value_type, Sl, Dl...>{lhs.get() + convert<Sr, Sl>(rhs.get())};
 }
 
-// lightweight list type required to separate dimension parameter packs in merge
+// lightweight list type required to separate dimension parameter packs
 template <Dimension... Dims>
 struct list {
     static constexpr std::size_t size = sizeof...(Dims);
 };
-
-namespace detail {
-
-template <std::size_t, Dimension, typename>
-struct find;
-
-template <std::size_t N, Dimension Find>
-struct find<N, Find, list<>> {
-    static constexpr std::size_t value = N;
-};
-
-template <std::size_t N, Dimension Find, Dimension Head, Dimension... Tail>
-struct find<N, Find, list<Head, Tail...>> {
-   private:
-    static constexpr bool found = dimension_same<Find, Head>::value;
-
-   public:
-    static constexpr std::size_t value =
-        found ? N : find<N + 1, Find, list<Tail...>>::value;
-};
-
-}  // namespace detail
-
-// Find the index of the Dimension matching 'Find' else return List::size
-template <std::size_t N, Dimension Find, typename List>
-inline constexpr bool find = detail::find<N, Find, List>::value;
 
 namespace detail {
 
@@ -335,48 +387,6 @@ struct concat_impl<list<Head...>, list<Tail...>> {
 // Concatenates two lists;
 template <typename A, typename B>
 using concat = detail::concat_impl<A, B>::type;
-
-// namespace detail {
-
-// template <std::size_t N, typename List, Dimension Head, Dimension... Tail>
-// constexpr auto head_impl(List x, list<Head, Tail...> tail) {
-//     if constexpr (List::size == N) {
-//         return x;
-//     } else if constexpr (List::size == N - 1) {
-//         return concat<List, list<Head>>{};
-//     } else {
-//         return head<N>(concat<List, Head>{}, list<Tail...>{});
-//     }
-// }
-
-// }  // namespace detail
-
-// // Returns a list filled with the first N elements
-// template <std::size_t N, typename List>
-//     requires N <=
-//     List::size using head = decltype(detail::head_impl<N>(list<>{}, List{}));
-
-// namespace detail {
-
-// template <std::size_t N, Dimension Head, Dimension... Tail>
-// constexpr auto tail_impl(list<Head, Tail...> x) {
-//     constexpr auto len = sizeof...(Tail) + 1;
-
-//     if constexpr (N == len) {
-//         return x;
-//     } else if constexpr (N == len - 1) {
-//         return list<Tail...>{};
-//     } else {
-//         return tail<N>(list<Tail...>{});
-//     }
-// }
-
-// }  // namespace detail
-
-// // Returns a list filled with the last N elements
-// template <std::size_t N, typename List>
-//     requires N <=
-//     List::size using tail = decltype(detail::tail_impl<N>(List{}));
 
 namespace detail {
 
@@ -408,20 +418,82 @@ constexpr auto merge_sum_sorted_impl(list<A, As...> a, list<B, Bs...> b) {
     } else if constexpr (cmp > 0) {
         return merge_sum_sorted_impl<concat<List, B>>(a, list<Bs...>{});
     } else {
-        static_assert(dimension_same<A, B>::value,
+        static_assert(dimension_same_v<A, B>,
                       "During merge_sum found two conflicting dimensions with "
                       "the same symbol but different types.");
 
-        return merge_sum_sorted_impl<
-            concat<List, typename dimension_add<A, B>::type>>(list<As...>{},
+        using sum_t = dimension_add<A, typename B::exp>::type;
+
+        if constexpr (std::ratio_equal_v<typename sum_t::exp, std::ratio<0>>) {
+            return merge_sum_sorted_impl<List>(list<As...>{}, list<Bs...>{});
+        } else {
+            return merge_sum_sorted_impl<concat<List, sum_t>>(list<As...>{},
                                                               list<Bs...>{});
+        }
     }
 }
 
 }  // namespace detail
 
-// merge two sorted lists of dimensions into a new sorted list summing any
+// Merge two sorted lists of dimensions into a new sorted list summing any
 // dimensions of the same type.
 template <typename A, typename B>
 using merge_sum_sorted =
     decltype(detail::merge_sum_sorted_impl<list<>>(A{}, B{}));
+
+namespace detail {
+
+template <Arithmetic, Scale, typename>
+struct make_unit;
+
+template <Arithmetic T, Scale S, Dimension... Dims>
+struct make_unit<T, S, list<Dims...>> {
+    using type = unit<T, S, Dims...>;
+};
+
+}  // namespace detail
+
+template <Arithmetic T, Scale S, typename List>
+using make_unit_t = detail::make_unit<T, S, List>::type;
+
+template <Arithmetic Tl, Scale Sl, Dimension... Dl, Arithmetic Tr, Scale Sr,
+          Dimension... Dr>
+constexpr inline auto operator*(
+    unit<Tl, Sl, Dl...> lhs,
+    unit<Tr, Sr, Dr...> rhs) requires zero_offset_equal<Sl, Sr> {
+    using dimensions = merge_sum_sorted<list<Dl...>, list<Dr...>>;
+
+    using product = std::ratio_multiply<typename Sl::scale_factor,
+                                        typename Sr::scale_factor>;
+
+    using scale_type =
+        scale_simplify<product::num, product::den, Sl::zero_offset::num,
+                       Sl::zero_offset::den>::type;
+
+    using unit_t =
+        make_unit_t<decltype(lhs.get() * rhs.get()), scale_type, dimensions>;
+
+    return unit_t{lhs.get() * rhs.get()};
+}
+
+template <Arithmetic Tl, Scale Sl, Dimension... Dl, Arithmetic Tr, Scale Sr,
+          Dimension... Dr>
+constexpr inline auto operator/(
+    unit<Tl, Sl, Dl...> lhs,
+    unit<Tr, Sr, Dr...> rhs) requires zero_offset_equal<Sl, Sr> {
+    using dimensions =
+        merge_sum_sorted<list<Dl...>,
+                         list<dimension_multiply_t<Dr, std::ratio<-1>>...>>;
+
+    using product =
+        std::ratio_divide<typename Sl::scale_factor, typename Sr::scale_factor>;
+
+    using scale_type =
+        scale_simplify<product::num, product::den, Sl::zero_offset::num,
+                       Sl::zero_offset::den>::type;
+
+    using unit_t =
+        make_unit_t<decltype(lhs.get() / rhs.get()), scale_type, dimensions>;
+
+    return unit_t{lhs.get() / rhs.get()};
+}
