@@ -5,9 +5,11 @@
 using xu::list;
 
 using kelvin =
-    unit<double, scale<>, si::meter<8>, si::kilogram<>, si::second<>>;
+    unit<double, scale<>, si::meter<8, 9>, si::kilogram<>, si::second<>>;
 using degree =
-    unit<double, scale<10, 1>, si::ampere<>, si::meter<>, si::second<>>;
+    unit<double, scale<10, 1>, si::meter<8, 9>, si::kilogram<>, si::second<>>;
+
+using conors = unit<double, scale<>, si::meter<>>;
 
 using l1 = list<si::meter<>, si::second<>>;
 using l2 = list<si::ampere<1, 99>, si::meter<>, si::kilogram<>>;
@@ -20,20 +22,19 @@ using s = xu::merge_sum_sorted_t<l1, l2>;
 // e emp{32};
 
 int main() {
-    kelvin a{1};
-    degree b{8};
-    kelvin c{3};
-    // degree b{1};
+    kelvin a{1.};
+    degree b{1.};
+    conors c{3.};
 
-    // int i = a;
+    kelvin k = b;
 
-    c = a;
+    // k = xu::raw_convert<kelvin>(c);
 
-    auto d = a * a * c * a / a * a * c * b / b * a * a * a / b;
+    auto d = c / b * b / c;
 
-    // int i = d;
+    auto e = a * a * a;
 
-    std::cout << si::meter<>::symbol << std::endl;
+    std::cout << k << std::endl;
 
     return 0;
 }
