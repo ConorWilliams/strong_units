@@ -4,7 +4,7 @@
 #include <ratio>
 #include <type_traits>
 
-namespace sci {
+namespace unit {
 
 // Lightweight list type required to separate parameter packs
 template <typename... Ts>
@@ -232,13 +232,13 @@ inline constexpr T scale_convert(T x) {
                           typename To::scale_factor>;
 
     if constexpr (std::ratio_equal_v<zero_offset, std::ratio<0>>) {
-        if constexpr (std::ratio_equal_v<scale_factor, std::ratio<0>>) {
+        if constexpr (std::ratio_equal_v<scale_factor, std::ratio<1>>) {
             return x;
         } else {
             return static_cast<T>(scale_factor::num) / scale_factor::den * x;
         }
     } else {
-        if constexpr (std::ratio_equal_v<scale_factor, std::ratio<0>>) {
+        if constexpr (std::ratio_equal_v<scale_factor, std::ratio<1>>) {
             return x + static_cast<T>(zero_offset::num) / zero_offset::den;
         } else {
             return static_cast<T>(scale_factor::num) / scale_factor::den * x +
@@ -455,10 +455,15 @@ inline constexpr bool zero_offset_equal_v =
                        typename B::scale_type::zero_offset>;
 
 template <Unit To, Unit From>
-[[nodiscard]] From::value_type raw_convert(
-    From x) requires dimension_equal_v<To, From> {
+[[nodiscard]] From::value_type unsafe_convert(From x) {
     return scale_convert<typename From::scale_type, typename To::scale_type>(
         x.get());
+}
+
+template <Unit To, Unit From>
+[[nodiscard]] From::value_type raw_convert(
+    From x) requires dimension_equal_v<To, From> {
+    return unsafe_convert<To>(x);
 }
 
 template <Unit To, Unit From>
@@ -483,6 +488,7 @@ class unit {
     static_assert(ordered_v<dimensions>,
                   "Unit dimensions must satisfy strict ordering.");
 
+    unit() = default;
     unit(unit const &) = default;
     unit(unit &&) = default;
 
@@ -677,53 +683,62 @@ using sort_t = detail::sort_impl<list<Dims>...>::type;
 // makes a unit type by simplifying and sorting the dimensions and simplifying
 // the scale
 template <Arithmetic T, Scale S, Dimension... Dims>
-using new_unit = make_unit_from_sorted_t<
+using make = make_unit_from_sorted_t<
     T,
     make_scale_t<S::scale_factor::num, S::scale_factor::den,
                  S::zero_offset::num, S::zero_offset::den>,
     sort_t<dimension_simplify_t<Dims>...>>;
 
-}  // namespace sci
+template <Scale S, Unit U>
+using make_scaled = make_unit_from_sorted_t<
+    typename U::value_type,
+    make_scale_t<std::ratio_multiply<typename S::scale_factor,
+                                     typename U::scale_type::scale_factor>::num,
+                 std::ratio_multiply<typename S::scale_factor,
+                                     typename U::scale_type::scale_factor>::den,
+                 std::ratio_add<typename S::zero_offset,
+                                typename U::scale_type::zero_offset>::num,
+                 std::ratio_add<typename S::zero_offset,
+                                typename U::scale_type::zero_offset>::den>,
+    typename U::dimensions>;
+
+}  // namespace unit
 
 /////////////////////////// SI base units   ////////////////////////////
-
-// exported names
-using sci::scale;
-
-using sci::Unit;
-
-template <typename T, typename S, typename... Dims>
-using unit = sci::new_unit<T, S, Dims...>;
-
-using sci::convert;
 
 namespace si {
 
 // Using a variadic template instead of defaulted results in shorter types
 
 template <std::intmax_t... Is>
-struct meter : sci::DimensionBase<"m", Is...> {};
+struct meter : unit::DimensionBase<"m", Is...> {};
 
 template <std::intmax_t... Is>
-struct second : sci::DimensionBase<"s", Is...> {};
+struct second : unit::DimensionBase<"s", Is...> {};
 
 template <std::intmax_t... Is>
-struct kilogram : sci::DimensionBase<"kg", Is...> {};
+struct kilogram : unit::DimensionBase<"kg", Is...> {};
 
 template <std::intmax_t... Is>
-struct ampere : sci::DimensionBase<"A", Is...> {};
+struct ampere : unit::DimensionBase<"A", Is...> {};
 
 template <std::intmax_t... Is>
-struct kelvin : sci::DimensionBase<"K", Is...> {};
+struct kelvin : unit::DimensionBase<"K", Is...> {};
 
 template <std::intmax_t... Is>
-struct mole : sci::DimensionBase<"mol", Is...> {};
+struct mole : unit::DimensionBase<"mol", Is...> {};
 
 template <std::intmax_t... Is>
-struct candela : sci::DimensionBase<"cd", Is...> {};
+struct candela : unit::DimensionBase<"cd", Is...> {};
 
 }  // namespace si
 
 namespace units {
-using meter =
-}
+
+template <typename T>
+using meter = unit::unit<T, unit::scale<>, si::meter<>>;
+
+template <typename T>
+using kilogram = unit::unit<T, unit::scale<>, si::kilogram<>>;
+
+}  // namespace units
