@@ -2,21 +2,32 @@
 
 #include "unit.hpp"
 
-using conors = unit::make<double, unit::scale<>, si::meter<1>>;
+using kelvin = unit::make<double, unit::scale<>, si::mole<>, si::kilogram<>,
+                          si::meter<>, si::second<>, si::mole<>, si::meter<>>;
 
-using gigaconors = unit::make_scaled<unit::scale<1000>, conors>;
+kelvin a{};
+
+using gigaconors = unit::make_scaled<unit::scale<1000>, kelvin>;
+
+using scalar = unit::unit<int, unit::scale<>, si::meter<0>>;
+
+using unit::list;
+
+using l1 = unit::list<si::meter<>>;
+using l2 = unit::list<si::second<>>;
+
+using m = unit::merge_sum_sorted_t<l1, l2>;
+
+// int i = m{};
 
 int main() {
-    // k = unit::raw_convert<kelvin>(c);
-
     int b, k, c;
 
-    conors a{10.};
+    kelvin a{10.};
 
     auto d = c / b * b / c;
 
-    unit::make<double, unit::scale<1>, si::meter<2>> e =
-        a * a * a / gigaconors{1.};
+    auto e = a * a * a / gigaconors{1.};
 
     std::cout << e << std::endl;
 

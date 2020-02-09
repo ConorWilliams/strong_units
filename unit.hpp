@@ -9,7 +9,7 @@ namespace unit {
 // Lightweight list type required to separate parameter packs
 template <typename... Ts>
 struct list {
-    static constexpr std::size_t size = sizeof...(Ts);
+    inline static constexpr std::size_t size() { return sizeof...(Ts); }
 };
 
 namespace detail {
@@ -213,14 +213,7 @@ using make_scale_t =
     detail::make_scale<std::ratio<I, J>::num, std::ratio<I, J>::den,
                        std::ratio<K, L>::num, std::ratio<K, L>::den>::type;
 
-// currently only used once
-template <Scale A, Scale B>
-inline constexpr bool scale_equal_v =
-    std::ratio_equal_v<typename A::scale_factor, typename B::scale_factor>
-        &&std::ratio_equal_v<typename A::zero_offset, typename B::zero_offset>;
-
 // Could be generalised to arbitrary scale<...> !
-
 template <Scale From, Scale To, Arithmetic T>
 inline constexpr T scale_convert(T x) {
     using scale_factor = std::ratio_divide<typename From::scale_factor,
@@ -455,15 +448,10 @@ inline constexpr bool zero_offset_equal_v =
                        typename B::scale_type::zero_offset>;
 
 template <Unit To, Unit From>
-[[nodiscard]] From::value_type unsafe_convert(From x) {
-    return scale_convert<typename From::scale_type, typename To::scale_type>(
-        x.get());
-}
-
-template <Unit To, Unit From>
 [[nodiscard]] From::value_type raw_convert(
     From x) requires dimension_equal_v<To, From> {
-    return unsafe_convert<To>(x);
+    return scale_convert<typename From::scale_type, typename To::scale_type>(
+        x.get());
 }
 
 template <Unit To, Unit From>
@@ -479,8 +467,11 @@ class unit {
     using scale_type = S;
     using dimensions = list<Dims...>;
 
-    static_assert(dimensions::size || scale_equal_v<S, scale<>>,
-                  "Dimensionless units cannot be scaled.");
+    static_assert(
+        dimensions::size() > 0 ||
+            (std::ratio_equal_v<typename S::scale_factor, std::ratio<1>> &&
+             std::ratio_equal_v<typename S::zero_offset, std::ratio<0>>),
+        "Dimensionless units cannot be scaled.");
 
     static_assert((... && (Dims::exp::num != 0)),
                   "Unit dimension exponents cannot be zero.");
@@ -567,6 +558,48 @@ template <typename A, typename B>
 
 namespace detail {
 
+template <int, List, List, List>
+struct match;
+
+template <List, List, List>
+struct merge;
+
+template <List L>
+struct merge<L, list<>, list<>> : Type<L> {};
+
+template <List L, Dimension... Dims>
+struct merge<L, list<Dims...>, list<>> : Type<concat_t<L, list<Dims...>>> {};
+
+template <List L, Dimension... Dims>
+struct merge<L, list<>, list<Dims...>> : Type<concat_t<L, list<Dims...>>> {};
+
+template <List L, Dimension A, Dimension... As, Dimension B, Dimension... Bs>
+struct merge<L, list<A, As...>, list<B, Bs...>> {
+    using type = match<str_compare(A::symbol, B::symbol), L, list<A, As...>,
+                       list<B, Bs...>>::type;
+};
+
+template <List L, Dimension A, Dimension... As, List B>
+struct match<-1, L, list<A, As...>, B> {
+    using type = merge<concat_t<L, A>, list<As...>, B>::type;
+};
+
+template <List L, List A, Dimension B, Dimension... Bs>
+struct match<1, L, A, list<B, Bs...>> {
+    using type = merge<concat_t<L, B>, A, list<Bs...>>::type;
+};
+
+template <List L, Dimension A, Dimension... As, Dimension B, Dimension... Bs>
+struct match<0, L, list<A, As...>, list<B, Bs...>> {
+    static_assert(dimension_same_v<A, B>, "Dimensions have the same symbol.");
+
+    using dim_sum = dimension_add_t<A, typename B::exp>;
+    using type = std::conditional_t<
+        std::ratio_equal_v<typename dim_sum::exp, std::ratio<0>>,
+        typename merge<L, list<As...>, list<Bs...>>::type,
+        typename merge<concat_t<L, dim_sum>, list<As...>, list<Bs...>>::type>;
+};
+
 template <List L>
 constexpr auto merge_sum_sorted(list<> a, list<> b) {
     return L{};
@@ -613,9 +646,13 @@ constexpr auto merge_sum_sorted(list<A, As...> a, list<B, Bs...> b) {
 
 // Merge two sorted lists of dimensions into a new sorted list summing any
 // dimensions of the same type.
+// template <List A, List B>
+// requires ordered_v<A> &&ordered_v<B> using merge_sum_sorted_t =
+//     decltype(detail::merge_sum_sorted<list<>>(A{}, B{}));
+
 template <List A, List B>
 requires ordered_v<A> &&ordered_v<B> using merge_sum_sorted_t =
-    decltype(detail::merge_sum_sorted<list<>>(A{}, B{}));
+    detail::merge<list<>, A, B>::type;
 
 template <Unit A, Unit B>
 constexpr inline auto operator*(A lhs,
@@ -659,26 +696,44 @@ constexpr inline auto operator/(
 ////////////////////  SORTING   ///////////////////////
 
 namespace detail {
+// Bottom-up, compile time merge sorting!
 
 template <List...>
-struct sort_impl {};
+struct sort_impl;
 
+// Empty list (sorting nothing) edge case
 template <>
-struct sort_impl<> : Type<list<>> {};
+struct sort_impl<list<>> : Type<list<>> {};
 
+// End condition = working list contains single (sorted) list
 template <List Single>
-struct sort_impl<Single> : Type<Single> {};
+struct sort_impl<list<Single>> : Type<Single> {};
 
-template <List First, List Second, List... Tail>
-struct sort_impl<First, Second, Tail...> {
-    using type = sort_impl<merge_sum_sorted_t<First, Second>, Tail...>::type;
+// Re-curse condition = no more sub-list
+template <List... Ls>
+struct sort_impl<list<Ls...>> {
+    using type = sort_impl<list<>, Ls...>::type;
+};
+
+// Concatenate leftover (odd) sub-list into working list
+template <List Working, List Odd>
+struct sort_impl<Working, Odd> {
+    using type = sort_impl<concat_t<Working, list<Odd>>>::type;
+};
+
+// General case - merge sub-lists and concatenate into working list
+template <List Working, List First, List Second, List... Tail>
+struct sort_impl<Working, First, Second, Tail...> {
+    using type =
+        sort_impl<concat_t<Working, list<merge_sum_sorted_t<First, Second>>>,
+                  Tail...>::type;
 };
 
 }  // namespace detail
 
-// compile time merge sort a parameter pack of dimensions
+// Compile time bottom-up merge sort a parameter pack of dimensions
 template <Dimension... Dims>
-using sort_t = detail::sort_impl<list<Dims>...>::type;
+using sort_t = detail::sort_impl<list<>, list<Dims>...>::type;
 
 // makes a unit type by simplifying and sorting the dimensions and simplifying
 // the scale
