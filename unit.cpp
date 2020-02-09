@@ -11,7 +11,11 @@ using gigaconors = unit::make_scaled<si::prefix::nano, kelvin>;
 using nanoconors = unit::unit<double, si::prefix::nano, si::_meter<2>,
                               si::_second<>, si::_kilogram<>>;
 
-using scalar = unit::unit<int, unit::scale<>, si::_meter<0>>;
+using gram = unit::make_scaled<unit::scale_make<-3>, si::kilogram<int>>;
+
+// using scalar = unit::unit<int, unit::scale<100>>;
+
+using angstrom = unit::make<double, unit::scale<-10>>;
 
 using unit::list;
 
@@ -20,24 +24,37 @@ using l2 = unit::list<si::_ampere<>, si::_second<>>;
 
 using m = unit::merge_sum_sorted_t<l1, l2>;
 
+template <typename T>
+using scalar = unit::make<T, unit::scale<>>;
+
+using unit::Unit;
+
 // int i = m{};
 
 int main() {
-    int b, k, c;
-
     kelvin a{10.};
+
+    constexpr scalar<int> s{3};
+
+    // std::cout << a.get() << std::endl;
 
     a = (a + a);
 
-    auto d = c / b * b / c;
+    // std::cout << a.get() << std::endl;
 
     nanoconors con{1.};
 
-    // con + d;
+    nanoconors b{a};
 
-    // auto e = a * a * b / con;
+    // std::cout << a.get() << ' ' << con.get() << std::endl;
 
-    std::cout << a << std::endl;
+    Unit e = a * a / con;
+
+    Unit h = (s + scalar<double>{4.}) * e;
+
+    // int i = e;
+
+    std::cout << gram{3} + si::kilogram<int>{1} << std::endl;
 
     return 0;
 }
