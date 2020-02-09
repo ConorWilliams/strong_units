@@ -2,19 +2,21 @@
 
 #include "unit.hpp"
 
-using kelvin = unit::make<double, unit::scale<>, si::mole<>, si::kilogram<>,
-                          si::meter<>, si::second<>, si::mole<>, si::meter<>>;
+using kelvin =
+    unit::make<double, unit::scale<>, si::_mole<>, si::_kilogram<>,
+               si::_meter<>, si::_second<>, si::_mole<-1>, si::_meter<>>;
 
-kelvin a{};
+using gigaconors = unit::make_scaled<si::prefix::nano, kelvin>;
 
-using gigaconors = unit::make_scaled<unit::scale<1000>, kelvin>;
+using nanoconors = unit::unit<double, si::prefix::nano, si::_meter<2>,
+                              si::_second<>, si::_kilogram<>>;
 
-using scalar = unit::unit<int, unit::scale<>, si::meter<0>>;
+using scalar = unit::unit<int, unit::scale<>, si::_meter<0>>;
 
 using unit::list;
 
-using l1 = unit::list<si::meter<>>;
-using l2 = unit::list<si::second<>>;
+using l1 = unit::list<si::_meter<>>;
+using l2 = unit::list<si::_ampere<>, si::_second<>>;
 
 using m = unit::merge_sum_sorted_t<l1, l2>;
 
@@ -25,11 +27,17 @@ int main() {
 
     kelvin a{10.};
 
+    a = (a + a);
+
     auto d = c / b * b / c;
 
-    auto e = a * a * a / gigaconors{1.};
+    nanoconors con{1.};
 
-    std::cout << e << std::endl;
+    // con + d;
+
+    // auto e = a * a * b / con;
+
+    std::cout << a << std::endl;
 
     return 0;
 }
