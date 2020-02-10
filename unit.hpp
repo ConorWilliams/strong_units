@@ -5,9 +5,10 @@
 #include <ratio>
 #include <type_traits>
 
-// Attribution - This library uses code written by John Lindgren to perform
-// compile time integer stringification.
+// Attribution - This library uses (potentially) modified sections of code taken
+// from the following sources.
 //
+// https://www.reddit.com/r/cpp/comments/bhxx49/c20_string_literals_as_nontype_template/
 // https://stackoverflow.com/questions/6713420/c-convert-integer-to-string-at-compile-time
 
 namespace unit {
@@ -105,12 +106,12 @@ constexpr int compare(Static<A> a, Static<B> b) {
                 return 1;
             }
         }
-
         return 0;
     }
 }
 
 namespace detail {
+// Compile time integer stringification
 
 constexpr std::intmax_t abs_val(std::intmax_t x) { return x < 0 ? -x : x; }
 
@@ -126,33 +127,24 @@ struct metastring {
 };
 
 template <std::intmax_t size, std::intmax_t x, char... args>
-struct numeric_builder {
-    using type = typename numeric_builder<size - 1, x / 10,
-                                          '0' + abs_val(x) % 10, args...>::type;
-};
+struct int_to_str_impl
+    : int_to_str_impl<size - 1, x / 10, '0' + abs_val(x) % 10, args...> {};
 
+// special case for two digits; minus sign is handled here
 template <std::intmax_t x, char... args>
-struct numeric_builder<2, x, args...> {
-    using type =
-        metastring < x<0 ? '-' : '0' + x / 10, '0' + abs_val(x) % 10, args...>;
-};
+    struct int_to_str_impl<2, x, args...>
+    : metastring < x<0 ? '-' : '0' + x / 10, '0' + abs_val(x) % 10, args...> {};
 
+// end case for one digit (positive numbers only)
 template <std::intmax_t x, char... args>
-struct numeric_builder<1, x, args...> {
-    using type = metastring<'0' + x, args...>;
-};
+struct int_to_str_impl<1, x, args...> : metastring<'0' + x, args...> {};
 
 }  // namespace detail
 
 template <std::intmax_t x>
 struct int_to_str {
-   private:
-    using type =
-        typename detail::numeric_builder<detail::num_digits(x), x, '\0'>::type;
-    static constexpr type value{};
-
-   public:
-    static constexpr Static<type::size()> get() { return value.data; }
+    using type = detail::int_to_str_impl<detail::num_digits(x), x, '\0'>;
+    static constexpr Static<type::size()> get() { return type::data; }
 };
 
 }  // namespace string
@@ -199,35 +191,31 @@ template <std::intmax_t I, std::intmax_t J, std::intmax_t K>
 struct scale<I, J, K> : ScaleBase<I, J, K> {};
 
 namespace detail {
-// if   Ratio <= -10        =>   1
-// if   -10 < Ratio <= -1   =>   0
-// if   -1 < Rato < 0       =>  -1
-// if   Ratio == 0          =>   0
-// if   Ratio < 1           =>  -1
-// if   1 <= Ratio < 10     =>   0
-// if   Ratio >= 10         =>   1
+
+enum : int { multiply, done, divide };
+
 template <typename Ratio>
 constexpr int standard_direction() {
     if constexpr (std::ratio_less_equal_v<Ratio, std::ratio<-10>>) {
-        return 1;
+        return divide;
     }
     if constexpr (std::ratio_less_equal_v<Ratio, std::ratio<-1>>) {
-        return 0;
+        return done;
     }
     if constexpr (std::ratio_less_v<Ratio, std::ratio<0>>) {
-        return -1;
+        return multiply;
     }
     if constexpr (std::ratio_equal_v<Ratio, std::ratio<0>>) {
-        return 0;
+        return done;
     }
     if constexpr (std::ratio_less_v<Ratio, std::ratio<1>>) {
-        return -1;
+        return multiply;
     }
     if constexpr (std::ratio_less_v<Ratio, std::ratio<10>>) {
-        return 0;
+        return done;
     }
     if constexpr (std::ratio_greater_equal_v<Ratio, std::ratio<10>>) {
-        return 1;
+        return divide;
     }
 }
 
@@ -235,19 +223,21 @@ constexpr int standard_direction() {
 template <std::intmax_t Exp, typename Ratio>
 struct standard_form_impl;
 
-// end condition
 template <int C, std::intmax_t Exp, typename Ratio>
-struct standard_match {
+struct standard_match;
+
+// end condition
+template <std::intmax_t Exp, typename Ratio>
+struct standard_match<done, Exp, Ratio> : Type<Ratio> {
     static constexpr std::intmax_t exp = Exp;
-    using type = Ratio;
 };
 
 template <std::intmax_t Exp, typename Ratio>
-struct standard_match<1, Exp, Ratio>
+struct standard_match<divide, Exp, Ratio>
     : standard_form_impl<Exp + 1, std::ratio_divide<Ratio, std::ratio<10>>> {};
 
 template <std::intmax_t Exp, typename Ratio>
-struct standard_match<-1, Exp, Ratio>
+struct standard_match<multiply, Exp, Ratio>
     : standard_form_impl<Exp - 1, std::ratio_multiply<Ratio, std::ratio<10>>> {
 };
 
@@ -496,6 +486,8 @@ struct ordered_impl<list<First, Second, Tail...>> {
 
 }  // namespace detail
 
+// Checks if a list<...> of dimensions satisfies strict ordering,
+// e.g. d_n < d_n+1 == true for all n.
 template <List L>
 inline constexpr bool ordered_v = detail::ordered_impl<L>::value;
 
@@ -562,7 +554,7 @@ inline constexpr auto anotate() {
     }
 }
 
-// concatenates static strings
+// Concatenates static strings
 inline constexpr auto join(auto... symbols) {
     if constexpr (sizeof...(symbols) == 1) {
         return (... + symbols) + string::Static{" dimensionless"};
@@ -625,21 +617,34 @@ class unit {
 
     constexpr explicit unit(Arithmetic value) : m_value{value} {};
 
-    constexpr explicit unit(Unit const &other)
+    template <Unit U>
+    requires dimension_equal_v<unit, U> constexpr explicit unit(U const &other)
         : m_value{raw_convert<unit>(other)} {}
 
-    constexpr unit &operator=(Unit const &other) {
+    template <Unit U>
+    requires dimension_equal_v<unit, U> constexpr unit &operator=(
+        U const &other) {
         m_value = raw_convert<unit>(other);
         return *this;
     }
 
+#ifdef UNIT_SCALAR_IMPLICIT_CONVERSION
+    // Implicit conversions are dangerous but useful for radian -> sine(x) etc.
+    inline constexpr operator value_type() const requires S::num == 1 &&
+        S::den == 1 && S::exp == 0 && sizeof...(Dims) == 0 {
+        return m_value;
+    }
+
+#endif
+
     inline constexpr value_type get() const noexcept { return m_value; }
 
-    inline constexpr char const *symbol() const noexcept { return m_symbol; }
+    static constexpr char const *symbol() noexcept { return m_symbol; }
 
    private:
     value_type m_value;
 
+    // Symbol contains scale info and dimension symbols / exponents.
     static constexpr string::Static m_symbol =
         join(anotate<S>(), anotate<Dims>()...);
 };
@@ -655,12 +660,12 @@ struct make_unit_from_sorted<T, S, list<Dims...>> : Type<unit<T, S, Dims...>> {
 
 }  // namespace detail
 
-// Helper to make a unit from a dimension list<>
+// Helper to make a unit from a dimension list<...>.
 template <Arithmetic T, Scale S, List L>
 using make_unit_from_sorted_t = detail::make_unit_from_sorted<T, S, L>::type;
 
 // Dimension safe unit conversion -- arithmetic type of unit may not equal
-// To::value_type
+// To::value_type e.g. decltype(return) != To in all cases.
 template <Unit To, Unit From>
 [[nodiscard]] constexpr auto convert(
     From const x) requires dimension_equal_v<To, From> {
@@ -698,7 +703,9 @@ template <typename A, typename B>
 
 namespace detail {
 
-template <int, List, List, List>
+// Recursively concatenates A/B into L choosing 'smallest' each time to maintain
+// order, dimensions comparing equal are summed
+template <int, List L, List A, List B>
 struct match;
 
 template <List, List, List>
@@ -722,19 +729,23 @@ struct merge<L, list<A, As...>, list<B, Bs...>>
     : match<string::compare(A::symbol, B::symbol), L, list<A, As...>,
             list<B, Bs...>> {};
 
+// Concatenate head of A into L
 template <List L, Dimension A, Dimension... As, List B>
 struct match<-1, L, list<A, As...>, B> : merge<concat_t<L, A>, list<As...>, B> {
 };
 
+// Concatenate head of B into L
 template <List L, List A, Dimension B, Dimension... Bs>
 struct match<1, L, A, list<B, Bs...>> : merge<concat_t<L, B>, A, list<Bs...>> {
 };
 
+// Equal comparison case means we sum the dimension exponents
 template <List L, Dimension A, Dimension... As, Dimension B, Dimension... Bs>
 struct match<0, L, list<A, As...>, list<B, Bs...>> {
     static_assert(dimension_same_v<A, B>, "Dimensions cannot have == symbols.");
 
     using dim_sum = dimension_add_t<A, typename B::exp>;
+
     using type = std::conditional_t<
         std::ratio_equal_v<typename dim_sum::exp, std::ratio<0>>,
         typename merge<L, list<As...>, list<Bs...>>::type,
@@ -750,8 +761,8 @@ requires ordered_v<A> &&ordered_v<B> using merge_sum_sorted_t =
     detail::merge<list<>, A, B>::type;
 
 namespace detail {
-// Bottom-up, compile time merge sorting!
 
+// Bottom-up, compile time merge sorting!
 template <List...>
 struct sort_impl;
 

@@ -2,9 +2,107 @@
 
 #include "unit.hpp"
 
-using kelvin =
-    unit::make<double, unit::scale<>, si::_mole<>, si::_kilogram<>,
-               si::_meter<>, si::_second<>, si::_mole<-1>, si::_meter<>>;
+using kelvin = unit::make<
+    double, unit::scale<>, si::_mole<>, si::_kilogram<>, si::_meter<>,
+    si::_second<>, si::_mole<-1>, si::_meter<>, si::_mole<-1>, si::_meter<>,
+    si::_meter<2>, si::_second<>, si::_kilogram<>, si::_candela<99>,
+    si::_mole<>, si::_kilogram<>, si::_meter<>, si::_second<>, si::_mole<-1>,
+    si::_meter<>, si::_mole<-1>, si::_meter<>, si::_meter<2>, si::_second<>,
+    si::_kilogram<>, si::_candela<99>, si::_mole<>, si::_kilogram<>,
+    si::_meter<>, si::_second<>, si::_mole<-1>, si::_meter<>, si::_mole<-1>,
+    si::_meter<>, si::_meter<2>, si::_second<>, si::_kilogram<>,
+    si::_candela<99>, si::_mole<>, si::_kilogram<>, si::_meter<>, si::_second<>,
+    si::_mole<-1>, si::_meter<>, si::_mole<-1>, si::_meter<>, si::_meter<2>,
+    si::_second<>, si::_kilogram<>, si::_candela<99>, si::_mole<>,
+    si::_kilogram<>, si::_meter<>, si::_second<>, si::_mole<-1>, si::_meter<>,
+    si::_mole<-1>, si::_meter<>, si::_meter<2>, si::_second<>, si::_kilogram<>,
+    si::_candela<99>, si::_mole<>, si::_kilogram<>, si::_meter<>, si::_second<>,
+    si::_mole<-1>, si::_meter<>, si::_mole<-1>, si::_meter<>, si::_meter<2>,
+    si::_second<>, si::_kilogram<>, si::_candela<99>, si::_mole<>,
+    si::_kilogram<>, si::_meter<>, si::_second<>, si::_mole<-1>, si::_meter<>,
+    si::_mole<-1>, si::_meter<>, si::_meter<2>, si::_second<>, si::_kilogram<>,
+    si::_candela<99>, si::_mole<>, si::_kilogram<>, si::_meter<>, si::_second<>,
+    si::_mole<-1>, si::_meter<>, si::_mole<-1>, si::_meter<>, si::_meter<2>,
+    si::_second<>, si::_kilogram<>, si::_candela<99>, si::_mole<>,
+    si::_kilogram<>, si::_meter<>, si::_second<>, si::_mole<-1>, si::_meter<>,
+    si::_mole<-1>, si::_meter<>, si::_meter<2>, si::_second<>, si::_kilogram<>,
+    si::_candela<99>, si::_mole<>, si::_kilogram<>, si::_meter<>, si::_second<>,
+    si::_mole<-1>, si::_meter<>, si::_mole<-1>, si::_meter<>, si::_meter<2>,
+    si::_second<>, si::_kilogram<>, si::_candela<99>, si::_mole<>,
+    si::_kilogram<>, si::_meter<>, si::_second<>, si::_mole<-1>, si::_meter<>,
+    si::_mole<-1>, si::_meter<>, si::_meter<2>, si::_second<>, si::_kilogram<>,
+    si::_candela<99>, si::_mole<>, si::_kilogram<>, si::_meter<>, si::_second<>,
+    si::_mole<-1>, si::_meter<>, si::_mole<-1>, si::_meter<>, si::_meter<2>,
+    si::_second<>, si::_kilogram<>, si::_candela<99>, si::_mole<>,
+    si::_kilogram<>, si::_meter<>, si::_second<>, si::_mole<-1>, si::_meter<>,
+    si::_mole<-1>, si::_meter<>, si::_meter<2>, si::_second<>, si::_kilogram<>,
+    si::_candela<99>, si::_mole<>, si::_kilogram<>, si::_meter<>, si::_second<>,
+    si::_mole<-1>, si::_meter<>, si::_mole<-1>, si::_meter<>, si::_meter<2>,
+    si::_second<>, si::_kilogram<>, si::_candela<99>, si::_mole<>,
+    si::_kilogram<>, si::_meter<>, si::_second<>, si::_mole<-1>, si::_meter<>,
+    si::_mole<-1>, si::_meter<>, si::_meter<2>, si::_second<>, si::_kilogram<>,
+    si::_candela<99>, si::_mole<>, si::_kilogram<>, si::_meter<>, si::_second<>,
+    si::_mole<-1>, si::_meter<>, si::_mole<-1>, si::_meter<>, si::_meter<2>,
+    si::_second<>, si::_kilogram<>, si::_candela<99>, si::_mole<>,
+    si::_kilogram<>, si::_ampere<9>, si::_meter<>, si::_second<>, si::_mole<-1>,
+    si::_meter<>, si::_mole<-1>, si::_meter<>, si::_meter<2>, si::_second<>,
+    si::_kilogram<>, si::_candela<99>, si::_mole<>, si::_kilogram<>,
+    si::_meter<>, si::_second<>, si::_mole<-1>, si::_meter<>, si::_mole<-1>,
+    si::_meter<>, si::_meter<2>, si::_second<>, si::_kilogram<>,
+    si::_candela<99>, si::_mole<>, si::_kilogram<>, si::_meter<>, si::_second<>,
+    si::_mole<-1>, si::_meter<>, si::_mole<-1>, si::_meter<>, si::_meter<2>,
+    si::_second<>, si::_kilogram<>, si::_candela<99>, si::_mole<>,
+    si::_kilogram<>, si::_meter<>, si::_second<>, si::_mole<-1>, si::_meter<>,
+    si::_mole<-1>, si::_meter<>, si::_meter<2>, si::_second<>, si::_kilogram<>,
+    si::_candela<99>, si::_mole<>, si::_kilogram<>, si::_meter<>, si::_second<>,
+    si::_mole<-1>, si::_meter<>, si::_mole<-1>, si::_meter<>, si::_meter<2>,
+    si::_second<>, si::_kilogram<>, si::_candela<99>, si::_mole<>,
+    si::_kilogram<>, si::_meter<>, si::_second<>, si::_mole<-1>, si::_meter<>,
+    si::_mole<-1>, si::_meter<>, si::_meter<2>, si::_second<>, si::_kilogram<>,
+    si::_candela<99>, si::_mole<>, si::_kilogram<>, si::_meter<>, si::_second<>,
+    si::_mole<-1>, si::_meter<>, si::_mole<-1>, si::_meter<>, si::_meter<2>,
+    si::_second<>, si::_kilogram<>, si::_candela<99>, si::_mole<>,
+    si::_kilogram<>, si::_meter<>, si::_second<>, si::_mole<-1>, si::_meter<>,
+    si::_mole<-1>, si::_meter<>, si::_meter<2>, si::_second<>, si::_kilogram<>,
+    si::_candela<99>, si::_mole<>, si::_kilogram<>, si::_meter<>, si::_second<>,
+    si::_mole<-1>, si::_meter<>, si::_mole<-1>, si::_meter<>, si::_meter<2>,
+    si::_second<>, si::_kilogram<>, si::_candela<99>, si::_mole<>,
+    si::_kilogram<>, si::_meter<>, si::_second<>, si::_mole<-1>, si::_meter<>,
+    si::_mole<-1>, si::_meter<>, si::_meter<2>, si::_second<>, si::_kilogram<>,
+    si::_kelvin<-9>, si::_candela<99>, si::_mole<>, si::_kilogram<>,
+    si::_meter<>, si::_second<>, si::_mole<-1>, si::_meter<>, si::_mole<-1>,
+    si::_meter<>, si::_meter<2>, si::_second<>, si::_kilogram<>,
+    si::_candela<99>, si::_mole<>, si::_kilogram<>, si::_meter<>, si::_second<>,
+    si::_mole<-1>, si::_meter<>, si::_mole<-1>, si::_meter<>, si::_meter<2>,
+    si::_second<>, si::_kilogram<>, si::_candela<99>, si::_mole<>,
+    si::_kilogram<>, si::_meter<>, si::_second<>, si::_mole<-1>, si::_meter<>,
+    si::_mole<-1>, si::_meter<>, si::_meter<2>, si::_second<>, si::_kilogram<>,
+    si::_candela<99>, si::_mole<>, si::_kilogram<>, si::_meter<>, si::_second<>,
+    si::_mole<-1>, si::_meter<>, si::_mole<-1>, si::_meter<>, si::_meter<2>,
+    si::_second<>, si::_kilogram<>, si::_candela<99>, si::_mole<>,
+    si::_kilogram<>, si::_meter<>, si::_second<>, si::_mole<-1>, si::_meter<>,
+    si::_mole<-1>, si::_meter<>, si::_meter<2>, si::_second<>, si::_kilogram<>,
+    si::_candela<99>, si::_mole<>, si::_kilogram<>, si::_meter<>, si::_second<>,
+    si::_mole<-1>, si::_meter<>, si::_mole<-1>, si::_meter<>, si::_meter<2>,
+    si::_second<>, si::_kilogram<>, si::_candela<99>, si::_mole<>,
+    si::_kilogram<>, si::_meter<>, si::_second<>, si::_mole<-1>, si::_meter<>,
+    si::_mole<-1>, si::_meter<>, si::_meter<2>, si::_second<>, si::_kilogram<>,
+    si::_candela<99>, si::_mole<>, si::_kilogram<>, si::_meter<>, si::_second<>,
+    si::_mole<-1>, si::_meter<>, si::_mole<-1>, si::_meter<>, si::_meter<2>,
+    si::_second<>, si::_kilogram<>, si::_candela<99>, si::_mole<>,
+    si::_kilogram<>, si::_meter<>, si::_second<>, si::_mole<-1>, si::_meter<>,
+    si::_mole<-1>, si::_meter<>, si::_meter<2>, si::_second<>, si::_kilogram<>,
+    si::_candela<99>, si::_mole<>, si::_kilogram<>, si::_meter<>, si::_second<>,
+    si::_mole<-1>, si::_meter<>, si::_mole<-1>, si::_meter<>, si::_meter<2>,
+    si::_second<>, si::_kilogram<>, si::_candela<99>, si::_mole<>,
+    si::_kilogram<>, si::_meter<>, si::_second<>, si::_mole<-1>, si::_meter<>,
+    si::_mole<-1>, si::_meter<>, si::_meter<2>, si::_second<>, si::_kilogram<>,
+    si::_candela<99>, si::_mole<>, si::_kilogram<>, si::_meter<>, si::_second<>,
+    si::_mole<-1>, si::_meter<>, si::_mole<-1>, si::_meter<>, si::_meter<2>,
+    si::_second<>, si::_kilogram<>, si::_candela<99>, si::_mole<>,
+    si::_kilogram<>, si::_meter<>, si::_second<>, si::_mole<-1>, si::_meter<>,
+    si::_mole<-1>, si::_meter<>, si::_meter<2>, si::_second<>, si::_kilogram<>,
+    si::_candela<99>>;
 
 using gigaconors = unit::make_scaled<si::prefix::nano, kelvin>;
 
@@ -29,7 +127,7 @@ using scalar = unit::make<T, unit::scale<>>;
 
 using unit::Unit;
 
-// int i = m{};
+int i = kelvin{};
 
 int main() {
     kelvin a{10.};
@@ -44,7 +142,9 @@ int main() {
 
     nanoconors con{1.};
 
-    nanoconors b{a};
+    nanoconors b{1.};
+
+    // double hj = scalar<double>{3.};
 
     // std::cout << a.get() << ' ' << con.get() << std::endl;
 
@@ -54,7 +154,7 @@ int main() {
 
     // int i = e;
 
-    std::cout << gram{3} + si::kilogram<int>{1} << std::endl;
+    std::cout << gram{3} + si::kilogram<int>{1} << ' ' << h << std::endl;
 
     return 0;
 }
