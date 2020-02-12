@@ -1,17 +1,37 @@
 #pragma once
 
-#include <cmath>
+// Copyright (c) 2020 Conor Williams
+
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
+
+// The above copyright notice and this permission notice shall be included in
+// all copies or substantial portions of the Software.
+
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+// SOFTWARE.
+
+#include <cmath>    // pow
+#include <cstddef>  // std::size_t
 #include <cstdint>  // std::intmax_t
+#include <ostream>
 #include <ratio>
 #include <type_traits>
 
-// Attribution - This library uses (potentially) modified sections of code taken
-// from the following sources.
-//
-// https://www.reddit.com/r/cpp/comments/bhxx49/c20_string_literals_as_nontype_template/
-// https://stackoverflow.com/questions/6713420/c-convert-integer-to-string-at-compile-time
+#include "fixed_string.hpp"
 
 namespace unit {
+
+using namespace fs;
 
 // Lightweight list type required to separate parameter packs
 template <typename... Ts>
@@ -41,116 +61,6 @@ struct Type {
     using type = T;
 };
 
-///////////////////////////// Static Strings ///////////////////////////////
-
-namespace string {
-
-template <std::size_t N>
-class Static {
-   private:
-    char buf[N]{};  // null terminated char array
-
-   public:
-    constexpr Static(char const *s) {
-        for (std::size_t i = 0; i < N; ++i) {
-            buf[i] = s[i];
-        }
-    }
-
-    Static() = default;
-    Static(Static const &) = default;
-    Static(Static &&) = default;
-
-    Static &operator=(Static const &) = default;
-    Static &operator=(Static &&) = default;
-
-    static constexpr std::size_t size() { return N; }  // != length
-
-    constexpr char operator[](std::size_t i) const { return buf[i]; }
-
-    constexpr operator char const *() const { return buf; }  // implicit
-
-    // string concatenation
-    template <std::size_t O>
-    constexpr auto operator+(Static<O> other) const {
-        constexpr std::size_t len = size() + other.size() - 1;
-        char concat[len]{};
-
-        for (std::size_t i = 0; i < size() - 1; ++i) {  // miss null
-            concat[i] = buf[i];
-        }
-
-        for (std::size_t i = 0; i < other.size(); ++i) {
-            concat[size() - 1 + i] = other[i];
-        }
-
-        return Static<len>{concat};
-    }
-};
-
-template <unsigned N>
-Static(char const (&)[N])->Static<N>;
-
-// Performs standard string comparison on static string types
-template <std::size_t A, std::size_t B>
-constexpr int compare(Static<A> a, Static<B> b) {
-    if (a.size() < b.size()) {
-        return -1;
-    } else if (a.size() > b.size()) {
-        return 1;
-    } else {
-        for (std::size_t i = 0; i < a.size(); ++i) {
-            if (a[i] < b[i]) {
-                return -1;
-            } else if (a[i] > b[i]) {
-                return 1;
-            }
-        }
-        return 0;
-    }
-}
-
-namespace detail {
-// Compile time integer stringification
-
-constexpr std::intmax_t abs_val(std::intmax_t x) { return x < 0 ? -x : x; }
-
-// calculate number of digits needed, including minus sign
-constexpr std::intmax_t num_digits(std::intmax_t x) {
-    return x < 0 ? 1 + num_digits(-x) : x < 10 ? 1 : 1 + num_digits(x / 10);
-}
-
-template <char... args>
-struct metastring {
-    static constexpr char data[sizeof...(args)] = {args...};
-    static constexpr std::size_t size() { return sizeof...(args); }
-};
-
-template <std::intmax_t size, std::intmax_t x, char... args>
-struct int_to_str_impl
-    : int_to_str_impl<size - 1, x / 10, '0' + abs_val(x) % 10, args...> {};
-
-// special case for two digits; minus sign is handled here
-template <std::intmax_t x, char... args>
-    struct int_to_str_impl<2, x, args...>
-    : metastring < x<0 ? '-' : '0' + x / 10, '0' + abs_val(x) % 10, args...> {};
-
-// end case for one digit (positive numbers only)
-template <std::intmax_t x, char... args>
-struct int_to_str_impl<1, x, args...> : metastring<'0' + x, args...> {};
-
-}  // namespace detail
-
-template <std::intmax_t x>
-struct int_to_str {
-    using type = detail::int_to_str_impl<detail::num_digits(x), x, '\0'>;
-    static constexpr Static<type::size()> get() { return type::data; }
-};
-
-}  // namespace string
-
-//////////////////////////////  SCALE  //////////////////////////////////
-
 namespace detail {
 
 struct scale_tag {};  // marks class as being of scale type
@@ -159,11 +69,11 @@ struct scale_tag {};  // marks class as being of scale type
 
 template <std::intmax_t I, std::intmax_t J, std::intmax_t K>
 struct ScaleBase : private detail::scale_tag {
-    using significand = std::ratio<J, K>;
+    using ratio = std::ratio<J, K>;
 
     static constexpr std::intmax_t exp = I;
-    static constexpr std::intmax_t num = significand::num;
-    static constexpr std::intmax_t den = significand::den;
+    static constexpr std::intmax_t num = ratio::num;
+    static constexpr std::intmax_t den = ratio::den;
 
     static_assert(num > 0, "Cannot have zero or negative scaled dimension");
 };
@@ -283,16 +193,14 @@ namespace detail {
 
 template <Scale A, Scale B>
 struct scale_multiply {
-    using product =
-        std::ratio_multiply<typename A::significand, typename B::significand>;
+    using product = std::ratio_multiply<typename A::ratio, typename B::ratio>;
 
     using type = scale_make<A::exp + B::exp, product::num, product::den>;
 };
 
 template <Scale A, Scale B>
 struct scale_divide {
-    using product =
-        std::ratio_divide<typename A::significand, typename B::significand>;
+    using product = std::ratio_divide<typename A::ratio, typename B::ratio>;
 
     using type = scale_make<A::exp - B::exp, product::num, product::den>;
 };
@@ -314,11 +222,7 @@ inline constexpr auto scale_convert(T const x) {
     constexpr std::intmax_t den = conversion::den;
     constexpr std::intmax_t exp = conversion::exp;
 
-    // std::cout << "conversion " << num << ' ' << den << ' ' << exp <<
-    // std::endl;
-
-    // all this required to avoid floating point multiplication without
-    // -ffast-math
+    // Avoid floating point multiplication without -ffast-math
     if constexpr (exp == 0) {
         if constexpr (num == 1 && den == 1) {
             return x;
@@ -353,14 +257,14 @@ struct dimension_tag {};  // Marks class as being a dimension type.
 }  // namespace detail
 
 // Defaults required for variadic instantiation
-template <string::Static Str, std::intmax_t I = 1, std::intmax_t J = 1>
+template <fixed_string Str, std::intmax_t I = 1, std::intmax_t J = 1>
 struct DimensionBase : private detail::dimension_tag {
     using exp = std::ratio<I, J>;
 
     static constexpr std::intmax_t num = exp::num;
     static constexpr std::intmax_t den = exp::den;
 
-    static constexpr string::Static symbol = Str;
+    static constexpr fixed_string symbol = Str;
 };
 
 template <typename T>
@@ -479,15 +383,14 @@ struct ordered_impl<list<D>> : std::true_type {};
 
 template <Dimension First, Dimension Second, Dimension... Tail>
 struct ordered_impl<list<First, Second, Tail...>> {
-    static constexpr bool value =
-        string::compare(First::symbol, Second::symbol) < 0 &&
-        ordered_impl<list<Second, Tail...>>::value;
+    static constexpr bool value = compare(First::symbol, Second::symbol) < 0 &&
+                                  ordered_impl<list<Second, Tail...>>::value;
 };
 
 }  // namespace detail
 
 // Checks if a list<...> of dimensions satisfies strict ordering,
-// e.g. d_n < d_n+1 == true for all n.
+// e.g. d_n < d_n+1 == true for all n < N.
 template <List L>
 inline constexpr bool ordered_v = detail::ordered_impl<L>::value;
 
@@ -498,19 +401,17 @@ inline constexpr auto anotate() {
     constexpr std::intmax_t num = D::num;
     constexpr std::intmax_t den = D::den;
 
-    constexpr string::Static space = " ";
+    constexpr fixed_string space = " ";
 
     if constexpr (num == 1 && den == 1) {
         return space + D::symbol;
 
     } else if constexpr (num != 1 && den == 1) {
-        return space + D::symbol + string::Static{"^"} +
-               string::int_to_str<num>::get();
+        return space + D::symbol + fixed_string{"^"} + ito_fs<num>;
 
     } else if constexpr (den != 1) {
-        return space + D::symbol + string::Static{"^"} +
-               string::int_to_str<num>::get() + string::Static{"/"} +
-               string::int_to_str<den>::get();
+        return space + D::symbol + fixed_string{"^"} + ito_fs<num> +
+               fixed_string{"/"} + ito_fs<den>;
     }
 }
 
@@ -521,45 +422,31 @@ inline constexpr auto anotate() {
     constexpr std::intmax_t den = S::den;
     constexpr std::intmax_t exp = S::exp;
 
-    constexpr string::Static space = " (";
-    constexpr string::Static end = ")";
-
     if constexpr (exp == 0) {
         if constexpr (den == 1) {
             if constexpr (num == 1) {
-                return string::Static{""};
+                return fixed_string{""};
             } else {
-                return space + string::int_to_str<num>::get() + end;
+                return fixed_string{" ("} + ito_fs<num> + fixed_string{")"};
             }
         } else {
-            return space + string::int_to_str<num>::get() +
-                   string::Static{"/"} + string::int_to_str<den>::get() + end;
+            return fixed_string{" ("} + ito_fs<num> + fixed_string{"/"} +
+                   ito_fs<den> + fixed_string{")"};
         }
     } else {
         if constexpr (den == 1) {
             if constexpr (num == 1) {
-                return space + string::Static{"10^"} +
-                       string::int_to_str<exp>::get() + end;
+                return fixed_string{" ("} + fixed_string{"10^"} + ito_fs<exp> +
+                       fixed_string{")"};
             } else {
-                return space + string::int_to_str<num>::get() +
-                       string::Static{" x 10^"} +
-                       string::int_to_str<exp>::get() + end;
+                return fixed_string{" ("} + ito_fs<num> +
+                       fixed_string{" x 10^"} + ito_fs<exp> + fixed_string{")"};
             }
         } else {
-            return space + string::int_to_str<num>::get() +
-                   string::Static{"/"} + string::int_to_str<den>::get() +
-                   string::Static{" x 10^"} + string::int_to_str<exp>::get() +
-                   end;
+            return fixed_string{" ("} + ito_fs<num> + fixed_string{"/"} +
+                   ito_fs<den> + fixed_string{" x 10^"} + ito_fs<exp> +
+                   fixed_string{")"};
         }
-    }
-}
-
-// Concatenates static strings
-inline constexpr auto join(auto... symbols) {
-    if constexpr (sizeof...(symbols) == 1) {
-        return (... + symbols) + string::Static{" dimensionless"};
-    } else {
-        return (... + symbols);
     }
 }
 
@@ -639,15 +526,19 @@ class unit {
 
     inline constexpr value_type get() const noexcept { return m_value; }
 
-    static constexpr char const *symbol() noexcept { return m_symbol; }
+    static constexpr std::string_view symbol() noexcept {
+        return m_symbol.view();
+    }
 
    private:
     value_type m_value;
 
     // Symbol contains scale info and dimension symbols / exponents.
-    static constexpr string::Static m_symbol =
-        join(anotate<S>(), anotate<Dims>()...);
+    static constexpr fixed_string m_symbol = {anotate<S>(), anotate<Dims>()...};
 };
+
+template <typename T>
+unit(T)->unit<T, scale<>>;
 
 namespace detail {
 
@@ -726,8 +617,8 @@ struct merge<L, list<>, list<Dims...>> : concat<L, list<Dims...>> {};
 // General case performs string comparison and despatches to match<...>
 template <List L, Dimension A, Dimension... As, Dimension B, Dimension... Bs>
 struct merge<L, list<A, As...>, list<B, Bs...>>
-    : match<string::compare(A::symbol, B::symbol), L, list<A, As...>,
-            list<B, Bs...>> {};
+    : match<compare(A::symbol, B::symbol), L, list<A, As...>, list<B, Bs...>> {
+};
 
 // Concatenate head of A into L
 template <List L, Dimension A, Dimension... As, List B>
@@ -859,50 +750,51 @@ constexpr inline auto operator/(unit<Tl, Sl, Dl...> lhs,
 
 /////////////////////////// SI base units   ////////////////////////////
 
-// it is undefined behaviour to: using namespace::si, so... don't ;)
 namespace si {
 
-// '_' prefix marks dimension rather than name-space to keep names short.
+// '_d' suffix marks dimension .
 
 template <std::intmax_t... Is>
-struct _meter : unit::DimensionBase<"m", Is...> {};
+struct meter_d : unit::DimensionBase<"m", Is...> {};
 
 template <std::intmax_t... Is>
-struct _second : unit::DimensionBase<"s", Is...> {};
+struct second_d : unit::DimensionBase<"s", Is...> {};
 
 template <std::intmax_t... Is>
-struct _kilogram : unit::DimensionBase<"kg", Is...> {};
+struct kilogram_d : unit::DimensionBase<"kg", Is...> {};
 
 template <std::intmax_t... Is>
-struct _ampere : unit::DimensionBase<"A", Is...> {};
+struct ampere_d : unit::DimensionBase<"A", Is...> {};
 
 template <std::intmax_t... Is>
-struct _kelvin : unit::DimensionBase<"K", Is...> {};
+struct kelvin_d : unit::DimensionBase<"K", Is...> {};
 
 template <std::intmax_t... Is>
-struct _mole : unit::DimensionBase<"mol", Is...> {};
+struct mole_d : unit::DimensionBase<"mol", Is...> {};
 
 template <std::intmax_t... Is>
-struct _candela : unit::DimensionBase<"cd", Is...> {};
+struct candela_d : unit::DimensionBase<"cd", Is...> {};
 
 // base units
 
-template <typename T>
-using meter = unit::unit<T, unit::scale<>, si::_meter<>>;
+// template <typename T>
+// using meter = unit::unit<T, unit::scale<>, si::meter_d<>>;
 
 template <typename T>
-using kilogram = unit::unit<T, unit::scale<>, si::_kilogram<>>;
+using kilogram = unit::unit<T, unit::scale<>, si::kilogram_d<>>;
 
 // derived units
 
+constexpr unit::unit<int, unit::scale<>, si::meter_d<>> meter{1};
+
 namespace prefix {
 
+using kilo = unit::scale<3>;
 using nano = unit::scale<-9>;
 
 }  // namespace prefix
 
-//
-
-// Using a variadic template instead of defaulted results in shorter types
+template <unit::Unit U>
+using kilo = unit::make_scaled<prefix::kilo, U>;
 
 }  // namespace si
