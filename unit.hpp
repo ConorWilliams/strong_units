@@ -129,7 +129,7 @@ class unit {
     constexpr explicit unit(Arithmetic value) : m_value{value} {};
 
     template <Unit U>
-    requires dimension_equal_v<unit, U> constexpr explicit unit(U const &other)
+    requires dimension_equal_v<unit, U> constexpr unit(U const &other)
         : m_value{raw_convert<unit>(other)} {}
 
     template <Unit U>
@@ -169,7 +169,6 @@ unit(T)->unit<T, scale<>>;
 
 /////////////////////////////////  operators //////////////////////////////////
 
-// cout unit
 std::ostream &operator<<(std::ostream &os, const Unit &obj) {
     return os << obj.get();
 }

@@ -22,6 +22,9 @@
 
 #include "unit.hpp"
 
+// This file is part of the sUnit library and contains a full definition of
+// the SI unit system in sUnit types.
+
 #ifndef UNIT_DEFAULT_TYPE
 #define UNIT_DEFAULT_TYPE double
 #endif
@@ -56,7 +59,7 @@ struct candela_d : unit::DimensionBase<"cd", Is...> {};
 
 // SI base unit types, unit types follow the _t suffix convention
 
-template <typename T = double>
+template <typename T>
 using meter_t = unit::unit<T, unit::scale<>, meter_d<>>;
 
 template <typename T>
@@ -77,17 +80,42 @@ using mole_t = unit::unit<T, unit::scale<>, mole_d<>>;
 template <typename T>
 using candela_t = unit::unit<T, unit::scale<>, candela_d<>>;
 
+// Concepts for SI base dimensions
+
+template <typename T>
+concept Length = unit::Unit<T>&& unit::dimension_equal_v<T, meter_t<int>>;
+
+template <typename T>
+concept Time = unit::Unit<T>&& unit::dimension_equal_v<T, second_t<int>>;
+
+template <typename T>
+concept Mass = unit::Unit<T>&& unit::dimension_equal_v<T, kilogram_t<int>>;
+
+template <typename T>
+concept Current = unit::Unit<T>&& unit::dimension_equal_v<T, ampere_t<int>>;
+
+template <typename T>
+concept Temprature = unit::Unit<T>&& unit::dimension_equal_v<T, kelvin_t<int>>;
+
+template <typename T>
+concept Amount = unit::Unit<T>&& unit::dimension_equal_v<T, mole_t<int>>;
+
+template <typename T>
+concept Intensity = unit::Unit<T>&& unit::dimension_equal_v<T, kilogram_t<int>>;
+
 // SI base unit literal instances
-inline constexpr meter_t<UNIT_DEFAULT_TYPE> meter{UNIT_VALUE_ONE};
-inline constexpr second_t<UNIT_DEFAULT_TYPE> second{UNIT_VALUE_ONE};
-inline constexpr kilogram_t<UNIT_DEFAULT_TYPE> kilogram{UNIT_VALUE_ONE};
-inline constexpr ampere_t<UNIT_DEFAULT_TYPE> ampere{UNIT_VALUE_ONE};
-inline constexpr kelvin_t<UNIT_DEFAULT_TYPE> kelvin{UNIT_VALUE_ONE};
-inline constexpr mole_t<UNIT_DEFAULT_TYPE> mole{UNIT_VALUE_ONE};
-inline constexpr candela_t<UNIT_DEFAULT_TYPE> candela{UNIT_VALUE_ONE};
+//
+// clang-format off
+inline constexpr    meter_t<UNIT_DEFAULT_TYPE>    meter {UNIT_VALUE_ONE};
+inline constexpr   second_t<UNIT_DEFAULT_TYPE>   second {UNIT_VALUE_ONE};
+inline constexpr kilogram_t<UNIT_DEFAULT_TYPE> kilogram {UNIT_VALUE_ONE};
+inline constexpr   ampere_t<UNIT_DEFAULT_TYPE>   ampere {UNIT_VALUE_ONE};
+inline constexpr   kelvin_t<UNIT_DEFAULT_TYPE>   kelvin {UNIT_VALUE_ONE};
+inline constexpr     mole_t<UNIT_DEFAULT_TYPE>     mole {UNIT_VALUE_ONE};
+inline constexpr  candela_t<UNIT_DEFAULT_TYPE>  candela {UNIT_VALUE_ONE};
 
 namespace prefix {
-// clang-format off
+
 using yotta = unit::scale<24>;
 using zetta = unit::scale<21>;
 using   exa = unit::scale<18>;
@@ -119,7 +147,5 @@ using  zebi = unit::scale_multiply_t<exbi, kibi>;
 using  yobi = unit::scale_multiply_t<zebi, kibi>;
 
 // clang-format on
-}  // namespace prefix
 
-template <unit::Unit U>
-using kilo = unit::unit_scaled<prefix::kilo, U>;
+}  // namespace prefix
