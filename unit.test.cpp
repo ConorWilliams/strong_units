@@ -2,94 +2,87 @@
 #define DOCTEST_CONFIG_SUPER_FAST_ASSERTS
 #include "doctest.h"
 
-#include "fixed_string.hpp"
+#include "unit.hpp"
 
-using namespace fs;
+using namespace unit;
 
-TEST_CASE("fixed_string class") {
-    constexpr fixed_string empty;
+TEST_CASE("standard form") {
+    // edge cases -10, 1, 0, 1, 10
 
-    CHECK(empty.empty());
+    using zero = standard_form<std::ratio<0>>;
 
-    CHECK(empty.size() == 0);
-    CHECK(decltype(empty)::size() == 0);
+    CHECK(std::ratio_equal_v<typename zero::type, std::ratio<0>>);
+    CHECK(zero::exp == 0);
 
-    CHECK(empty.view() == "");
+    using one = standard_form<std::ratio<1>>;
+    using m_one = standard_form<std::ratio<-1>>;
 
-    constexpr fixed_string one = "x";
-    constexpr fixed_string two = "xx";
-    constexpr fixed_string three = "xxx";
+    CHECK(std::ratio_equal_v<typename one::type, std::ratio<1>>);
+    CHECK(one::exp == 0);
 
-    CHECK(!one.empty());
-    CHECK(one.size() == 1);
+    CHECK(std::ratio_equal_v<typename m_one::type, std::ratio<-1>>);
+    CHECK(m_one::exp == 0);
 
-    CHECK(three == one + two);
-    CHECK(three == one + one + one);
+    using mid = standard_form<std::ratio<15, 7>>;
+    using m_mid = standard_form<std::ratio<-15, 7>>;
 
-    CHECK(three == fixed_string{one, one, one});
-    CHECK(three == fixed_string{two, one});
+    CHECK(std::ratio_equal_v<typename mid::type, std::ratio<15, 7>>);
+    CHECK(mid::exp == 0);
 
-    constexpr fixed_string five = "axxxe";
+    CHECK(std::ratio_equal_v<typename m_mid::type, std::ratio<-15, 7>>);
+    CHECK(m_mid::exp == 0);
 
-    CHECK(five.view(1, 4) == "xxx");
-    CHECK(five.view(1, 4) == three.view());
+    using ten = standard_form<std::ratio<10>>;
+    using m_ten = standard_form<std::ratio<-10>>;
 
-    int count = 0;
-    for (auto&& elem : "0123456789"_fs) {
-        CHECK(elem == '0' + count++);
-    }
+    CHECK(std::ratio_equal_v<typename ten::type, std::ratio<1>>);
+    CHECK(ten::exp == 1);
 
-    fixed_string change = "xxx";
+    CHECK(std::ratio_equal_v<typename m_ten::type, std::ratio<-1>>);
+    CHECK(m_ten::exp == 1);
 
-    CHECK(change == three);
+    using large = standard_form<std::ratio<13000, 7>>;
+    using m_large = standard_form<std::ratio<-13000, 7>>;
 
-    change[0] = 'a';
-    change[1] = 'b';
-    change[2] = 'c';
+    CHECK(std::ratio_equal_v<typename large::type, std::ratio<13, 7>>);
+    CHECK(large::exp == 3);
 
-    CHECK(change == fixed_string{"abc"});
+    CHECK(std::ratio_equal_v<typename m_large::type, std::ratio<-13, 7>>);
+    CHECK(m_large::exp == 3);
 }
 
-template <fixed_string str>
-struct custom_class {
-    static constexpr fixed_string data = str;
-};
-
-TEST_CASE("fixed_string template") {
-    using cool = custom_class<"cool!">;
-
-    CHECK(cool::data == fixed_string{"cool!"});
+TEST_CASE("scale_make") {
+    CHECK(std::is_same_v<scale_make<0, 1, 3>, scale<-1, 10, 3>>);
+    CHECK(std::is_same_v<scale_make<0, 2, 1>, scale<0, 2>>);
+    CHECK(std::is_same_v<scale_make<4, 1, 1>, scale<4>>);
+    CHECK(std::is_same_v<scale_make<0, 1, 1>, scale<>>);
 }
 
-TEST_CASE("fixed_string compare") {
-    constexpr fixed_string a = "a";
-    constexpr fixed_string b = "b";
-    constexpr fixed_string two = "xx";
+TEST_CASE("scale / & *") {
+    using one = scale_make<0, 1, 1>;
+    using five = scale_make<0, 5, 1>;
+    using twenty_five = scale_make<0, 25, 1>;
 
-    constexpr int tmp = compare(a, b);
+    CHECK(std::is_same_v<scale_multiply_t<one, one>, one>);
+    CHECK(std::is_same_v<scale_multiply_t<one, five>, five>);
+    CHECK(std::is_same_v<scale_multiply_t<five, one>, five>);
+    CHECK(std::is_same_v<scale_multiply_t<five, five>, twenty_five>);
 
-    CHECK(compare(a, a) == 0);
-    CHECK(compare(a, b) == -1);
-    CHECK(compare(b, a) == 1);
-
-    CHECK(compare(b, fixed_string{"b"}) == 0);
-
-    CHECK(compare(a, two) == -1);
-    CHECK(compare(b, two) == -1);
-
-    CHECK(compare(two, a) == 1);
-    CHECK(compare(two, b) == 1);
-
-    CHECK(compare(fixed_string{"xa"}, fixed_string{"xb"}) == -1);
-    CHECK(compare(fixed_string{"xb"}, fixed_string{"xa"}) == 1);
+    CHECK(std::is_same_v<scale_divide_t<one, one>, one>);
+    CHECK(std::is_same_v<scale_divide_t<one, five>, scale_make<0, 1, 5>>);
+    CHECK(std::is_same_v<scale_divide_t<five, one>, five>);
+    CHECK(std::is_same_v<scale_divide_t<five, five>, one>);
+    CHECK(std::is_same_v<scale_divide_t<twenty_five, five>, five>);
 }
 
-TEST_CASE("fixed_string ito_fs") {
-    constexpr fixed_string zero = "0";
-    constexpr fixed_string plus = "12345";
-    constexpr fixed_string minus = "-12345";
+TEST_CASE("pow10") {
+    CHECK(detail::pow10<0>() == doctest::Approx(1));
 
-    CHECK(ito_fs<0> == zero);
-    CHECK(ito_fs<12345> == plus);
-    CHECK(ito_fs<-12345> == minus);
+    CHECK(detail::pow10<1>() == doctest::Approx(1e1));
+    CHECK(detail::pow10<10>() == doctest::Approx(1e10));
+    CHECK(detail::pow10<308>() == doctest::Approx(1e308));
+
+    CHECK(detail::pow10<-1>() == doctest::Approx(1e-1));
+    CHECK(detail::pow10<-10>() == doctest::Approx(1e-10));
+    CHECK(detail::pow10<-308>() == doctest::Approx(1e-308));
 }

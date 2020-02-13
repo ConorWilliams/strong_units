@@ -1,15 +1,13 @@
 #include <iostream>
 
-#include "unit.hpp"
+#include "si.hpp"
 
-using kelvin = unit::unit_make<double, unit::scale<0, 2>>;
+using gigaconors = unit::unit_scaled<prefix::nano, kelvin_t<int>>;
 
-using gigaconors = unit::unit_scaled<si::prefix::nano, kelvin>;
+using nanoconors =
+    unit::unit_make<double, prefix::nano, meter_d<2>, second_d<>, kilogram_d<>>;
 
-using nanoconors = unit::unit_make<double, si::prefix::nano, si::meter_d<2>,
-                                   si::second_d<>, si::kilogram_d<>>;
-
-using gram = unit::unit_scaled<unit::scale_make<-3>, si::kilogram<int>>;
+using gram = unit::unit_scaled<unit::scale_make<-3>, kilogram_t<int>>;
 
 // using scalar = unit::unit<int, unit::scale<100>>;
 
@@ -17,8 +15,8 @@ using angstrom = unit::unit_make<double, unit::scale<-10>>;
 
 using unit::list;
 
-using l1 = unit::list<si::meter_d<>>;
-using l2 = unit::list<si::ampere_d<>, si::second_d<>>;
+using l1 = unit::list<meter_d<>>;
+using l2 = unit::list<ampere_d<>, second_d<>>;
 
 using m = unit::merge_sum_sorted_t<l1, l2>;
 
@@ -30,13 +28,13 @@ using unit::Unit;
 // int i = kelvin{};
 
 int main() {
-    kelvin a{10.};
+    kelvin_t<double> a{10.};
 
     std::cout << scalar<int>{56} << std::endl;
 
     a = (a + a);
 
-    std::cout << si::meter << std::endl;
+    std::cout << (meter) << std::endl;
 
     nanoconors con{1.};
 

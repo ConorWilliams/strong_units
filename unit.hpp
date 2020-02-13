@@ -214,41 +214,34 @@ using scale_divide_t = detail::scale_divide<A, B>::type;
 
 namespace detail {
 
-#ifdef __GNUG__
-#define UNIT_CONST_FUNCTION_ATTRIBUTE __attribute__((const))
-#else
-#define UNIT_CONST_FUNCTION_ATTRIBUTE
-#endif
-
-// Constexpr integral pow function
-template <std::intmax_t exponent, typename T>
-UNIT_CONST_FUNCTION_ATTRIBUTE constexpr auto pow_impl(T x) {
+// Constexpr pow10 function
+template <std::intmax_t exponent>
+constexpr std::conditional_t<(exponent < 308), double, long double>
+pow10_impl() {
     if constexpr (exponent == 0) {
-        if (x == 0) {
-            throw std::invalid_argument("pow<0>(0) is undefined");
-        } else {
-            return 1;
-        }
+        return 1.;
     } else if constexpr (exponent == 1) {
-        return x;
+        return 10.;
     } else if constexpr (exponent % 2 == 0) {
-        return pow<x / 2>(x) * pow<x / 2>(x);
+        return pow10_impl<exponent / 2>() * pow10_impl<exponent / 2>();
     } else {
-        return pow<x / 2>(x) * pow<x / 2>(x) * x;
+        return pow10_impl<exponent / 2>() * pow10_impl<exponent / 2>() * 10;
     }
 }
 
-template <std::intmax_t exponent, typename T>
-constexpr auto pow(T x) {
+template <std::intmax_t exponent>
+constexpr auto pow10() {
     if constexpr (exponent > 0) {
-        return
+        return pow10_impl<exponent>();
+    } else {
+        return 1. / pow10_impl<-exponent>();
     }
 }
 
 }  // namespace detail
 
 // Could be generalised to arbitrary scale<...> !
-template <Scale From, Scale To, Arithmetic T>
+template <Scale From, Scale To, typename T>
 inline constexpr auto scale_convert(T const x) {
     using conversion = scale_divide_t<From, To>;
 
@@ -265,19 +258,20 @@ inline constexpr auto scale_convert(T const x) {
         } else if constexpr (num == 1 && den != 1) {
             return x / den;
         } else {
-            return (x * num) / den;  // brackets ensure type propagation
+            return x * static_cast<double>(num) / den;
         }
     } else {
-        constexpr auto pow10 = std::pow(10, exp);
+        // double or long double
+        constexpr auto pow10 = detail::pow10<exp>();
 
         if constexpr (num == 1 && den == 1) {
             return x * pow10;
         } else if constexpr (num != 1 && den == 1) {
             return (x * num) * pow10;
         } else if constexpr (num == 1 && den != 1) {
-            return (x / den) * pow10;
+            return x / static_cast<double>(den) * pow10;
         } else {
-            return ((x * num) / den) * pow10;
+            return x * static_cast<double>(num) / den * pow10;
         }
     }
 }
@@ -372,10 +366,10 @@ namespace detail {
 template <typename, typename>
 struct dimension_add;
 
-template <template <std::intmax_t...> typename Dim, std::intmax_t... Il,
+template <template <std::intmax_t...> typename Dim, std::intmax_t... Is,
           typename Ratio>
-struct dimension_add<Dim<Il...>, Ratio> {
-    using sum = std::ratio_add<typename Dim<Il...>::exp, Ratio>;
+struct dimension_add<Dim<Is...>, Ratio> {
+    using sum = std::ratio_add<typename Dim<Is...>::exp, Ratio>;
     using type = dimension_simplify_t<Dim<sum::num, sum::den>>;
 };
 
@@ -391,10 +385,10 @@ namespace detail {
 template <typename, typename>
 struct dimension_multiply;
 
-template <template <std::intmax_t...> typename Dim, std::intmax_t... Il,
+template <template <std::intmax_t...> typename Dim, std::intmax_t... Is,
           typename Ratio>
-struct dimension_multiply<Dim<Il...>, Ratio> {
-    using product = std::ratio_multiply<typename Dim<Il...>::exp, Ratio>;
+struct dimension_multiply<Dim<Is...>, Ratio> {
+    using product = std::ratio_multiply<typename Dim<Is...>::exp, Ratio>;
     using type = dimension_simplify_t<Dim<product::num, product::den>>;
 };
 
@@ -404,8 +398,6 @@ struct dimension_multiply<Dim<Il...>, Ratio> {
 // product of std::ratio O and the argument dimensions' exponent.
 template <Dimension D, typename Ratio>
 using dimension_multiply_t = detail::dimension_multiply<D, Ratio>::type;
-
-//////////////////////////// UNIT  //////////////////////////////
 
 namespace detail {
 
@@ -420,8 +412,9 @@ struct ordered_impl<list<D>> : std::true_type {};
 
 template <Dimension First, Dimension Second, Dimension... Tail>
 struct ordered_impl<list<First, Second, Tail...>> {
-    static constexpr bool value = compare(First::symbol, Second::symbol) < 0 &&
-                                  ordered_impl<list<Second, Tail...>>::value;
+    static constexpr bool value =
+        fs::compare(First::symbol, Second::symbol) < 0 &&
+        ordered_impl<list<Second, Tail...>>::value;
 };
 
 }  // namespace detail
@@ -430,204 +423,6 @@ struct ordered_impl<list<First, Second, Tail...>> {
 // e.g. d_n < d_n+1 == true for all n < N.
 template <List L>
 inline constexpr bool ordered_v = detail::ordered_impl<L>::value;
-
-// Extracts symbol from dimension and returns symbol as a static string
-// decorated with exponent in minimal "symbol^x/y" like form.
-template <Dimension D>
-inline constexpr auto anotate() {
-    using namespace fs;  // for string literal operator
-
-    constexpr std::intmax_t num = D::num;
-    constexpr std::intmax_t den = D::den;
-
-    if constexpr (num == 1 && den == 1) {
-        return D::symbol;
-
-    } else if constexpr (num != 1 && den == 1) {
-        return D::symbol + "^"_fs + ito_fs<num>;
-
-    } else if constexpr (den != 1) {
-        return D::symbol + "^"_fs + ito_fs<num> + "/"_fs + ito_fs<den>;
-    }
-}
-
-// Stringifys a scale<> into a minimal "(a/b x 10^c)" like form.
-template <Scale S>
-inline constexpr auto anotate() {
-    using namespace fs;  // for string literal operator
-
-    constexpr std::intmax_t num = S::num;
-    constexpr std::intmax_t den = S::den;
-    constexpr std::intmax_t exp = S::exp;
-
-    if constexpr (exp == 0) {
-        if constexpr (den == 1) {
-            if constexpr (num == 1) {
-                return ""_fs;
-            } else {
-                return "("_fs + ito_fs<num> + ")"_fs;
-            }
-        } else {
-            return "("_fs + ito_fs<num> + "/"_fs + ito_fs<den> + ")"_fs;
-        }
-    } else {
-        if constexpr (den == 1) {
-            if constexpr (num == 1) {
-                return "(10^"_fs + ito_fs<exp> + ")"_fs;
-            } else {
-                return "("_fs + ito_fs<num> + " x 10^"_fs + ito_fs<exp> +
-                       ")"_fs;
-            }
-        } else {
-            return "("_fs + ito_fs<num> + "/"_fs + ito_fs<den> + " x 10^"_fs +
-                   ito_fs<exp> + ")"_fs;
-        }
-    }
-}
-
-// Join annotated scale and dimensions with correct spaces.
-template <typename Head, typename... Tail>
-inline constexpr auto join(Head head, Tail... tail) {
-    using namespace fs;  // for string literal operator
-
-    if constexpr (sizeof...(Tail) == 0) {
-        if constexpr (Head::size() == 0) {
-            return "dimensionless"_fs;
-        } else {
-            return head + " dimensionless"_fs;
-        }
-    } else {
-        if constexpr (Head::size() == 0) {
-            // Skip head, need ""_fs for case tail.size() = 1
-            return join(tail..., ""_fs);
-        } else {
-            return fixed_string{head, (" "_fs + tail)...};
-        }
-    }
-}
-
-// Forward declaration for concept
-template <Arithmetic T, Scale S, Dimension... Dims>
-class unit;
-
-namespace detail {
-
-template <typename>
-struct is_unit : std::false_type {};
-
-template <Arithmetic T, Scale S, Dimension... Dims>
-struct is_unit<unit<T, S, Dims...>> : std::true_type {};
-
-}  // namespace detail
-
-template <typename T>
-concept Unit = detail::is_unit<T>::value;
-
-// Overloading to accept unit<> which holds ::dimension = list<Dims...>
-template <Unit A, Unit B>
-inline constexpr bool dimension_equal_v<A, B> =
-    detail::dimension_equal<typename A::dimensions,
-                            typename B::dimensions>::value;
-
-// Safe unit conversion but returns raw float, double, etc
-template <Unit To, Unit From>
-[[nodiscard]] constexpr auto raw_convert(
-    From const x) requires dimension_equal_v<To, From> {
-    return scale_convert<typename From::scale_factor,
-                         typename To::scale_factor>(x.get());
-}
-
-// The libraries central type.
-template <Arithmetic T, Scale S, Dimension... Dims>
-class unit {
-   public:
-    using value_type = T;
-    using scale_factor = S;
-    using dimensions = list<Dims...>;
-
-    static_assert((... && (Dims::num != 0)),
-                  "Unit dimension exponents cannot be zero.");
-
-    static_assert(ordered_v<dimensions>,
-                  "Unit dimensions must satisfy strict ordering.");
-
-    unit() = default;
-    unit(unit const &) = default;
-    unit(unit &&) = default;
-
-    unit &operator=(unit const &) = default;
-    unit &operator=(unit &&) = default;
-
-    constexpr explicit unit(Arithmetic value) : m_value{value} {};
-
-    template <Unit U>
-    requires dimension_equal_v<unit, U> constexpr explicit unit(U const &other)
-        : m_value{raw_convert<unit>(other)} {}
-
-    template <Unit U>
-    requires dimension_equal_v<unit, U> constexpr unit &operator=(
-        U const &other) {
-        m_value = raw_convert<unit>(other);
-        return *this;
-    }
-
-#ifdef UNIT_SCALAR_IMPLICIT_CONVERSION
-    // Implicit conversions are dangerous but useful for radian -> sine(x) etc.
-    inline constexpr operator value_type() const requires S::num == 1 &&
-        S::den == 1 && S::exp == 0 && sizeof...(Dims) == 0 {
-        return m_value;
-    }
-#endif
-
-    [[nodiscard]] inline constexpr value_type get() const noexcept {
-        return m_value;
-    }
-
-    [[nodiscard]] inline static constexpr std::string_view symbol() noexcept {
-        return m_symbol.view();
-    }
-
-   private:
-    value_type m_value;
-
-    // Symbol contains scale info and dimension symbols / exponents.
-    static constexpr fs::fixed_string m_symbol =
-        join(anotate<S>(), anotate<Dims>()...);
-};
-
-// Deduction to default to scalar unit.
-template <typename T>
-unit(T)->unit<T, scale<>>;
-
-namespace detail {
-
-template <Arithmetic, Scale, typename>
-struct unit_make_from_sorted;
-
-template <Arithmetic T, Scale S, Dimension... Dims>
-struct unit_make_from_sorted<T, S, list<Dims...>> : Type<unit<T, S, Dims...>> {
-};
-
-}  // namespace detail
-
-// Helper to make a unit from a dimension list<...>.
-template <Arithmetic T, Scale S, List L>
-using unit_make_from_sorted_t = detail::unit_make_from_sorted<T, S, L>::type;
-
-// Dimension safe unit conversion -- arithmetic type of unit may not equal
-// To::value_type e.g. decltype(return) != To in all cases.
-template <Unit To, Unit From>
-[[nodiscard]] constexpr auto convert(
-    From const x) requires dimension_equal_v<To, From> {
-    return unit_make_from_sorted_t<decltype(raw_convert<To>(x)),
-                                   typename To::scale_factor,
-                                   typename To::dimensions>{raw_convert<To>(x)};
-}
-
-// cout unit
-std::ostream &operator<<(std::ostream &os, const Unit &obj) {
-    return os << obj.get() << obj.symbol();
-}
 
 /////////////////////////// list<> meta  ////////////////////////
 
@@ -744,6 +539,117 @@ struct sort_impl<Working, First, Second, Tail...>
 template <Dimension... Dims>
 using sort_t = detail::sort_impl<list<>, list<Dims>...>::type;
 
+////////////////////////// String manipulations  //////////////////////////////
+
+// Extracts symbol from dimension and returns symbol as a static string
+// decorated with exponent in minimal "symbol^x/y" like form.
+template <Dimension D>
+inline constexpr auto anotate() {
+    using namespace fs;  // for string literal operator
+
+    constexpr std::intmax_t num = D::num;
+    constexpr std::intmax_t den = D::den;
+
+    if constexpr (num == 1 && den == 1) {
+        return D::symbol;
+
+    } else if constexpr (num != 1 && den == 1) {
+        return D::symbol + "^"_fs + ito_fs<num>;
+
+    } else if constexpr (den != 1) {
+        return D::symbol + "^"_fs + ito_fs<num> + "/"_fs + ito_fs<den>;
+    }
+}
+
+// Stringifys a scale<> into a minimal "(a/b x 10^c)" like form.
+template <Scale S>
+inline constexpr auto anotate() {
+    using namespace fs;  // for string literal operator
+
+    constexpr std::intmax_t num = S::num;
+    constexpr std::intmax_t den = S::den;
+    constexpr std::intmax_t exp = S::exp;
+
+    if constexpr (exp == 0) {
+        if constexpr (den == 1) {
+            if constexpr (num == 1) {
+                return ""_fs;
+            } else {
+                return "("_fs + ito_fs<num> + ")"_fs;
+            }
+        } else {
+            return "("_fs + ito_fs<num> + "/"_fs + ito_fs<den> + ")"_fs;
+        }
+    } else {
+        if constexpr (den == 1) {
+            if constexpr (num == 1) {
+                return "(10^"_fs + ito_fs<exp> + ")"_fs;
+            } else {
+                return "("_fs + ito_fs<num> + " x 10^"_fs + ito_fs<exp> +
+                       ")"_fs;
+            }
+        } else {
+            return "("_fs + ito_fs<num> + "/"_fs + ito_fs<den> + " x 10^"_fs +
+                   ito_fs<exp> + ")"_fs;
+        }
+    }
+}
+
+// Join annotated scale and dimensions with correct spaces.
+template <typename Head, typename... Tail>
+inline constexpr auto join(Head head, Tail... tail) {
+    using namespace fs;  // for string literal operator
+
+    if constexpr (sizeof...(Tail) == 0) {
+        if constexpr (Head::size() == 0) {
+            return "dimensionless"_fs;
+        } else {
+            return head + " dimensionless"_fs;
+        }
+    } else {
+        if constexpr (Head::size() == 0) {
+            // Skip head, need ""_fs for case tail.size() = 1
+            return join(tail..., ""_fs);
+        } else {
+            return fixed_string{head, (" "_fs + tail)...};
+        }
+    }
+}
+
+////////////////////////////////// UNIT  ////////////////////////////////////
+
+// Forward declaration for concept
+template <Arithmetic T, Scale S, Dimension... Dims>
+class unit;
+
+namespace detail {
+
+template <typename>
+struct is_unit : std::false_type {};
+
+template <Arithmetic T, Scale S, Dimension... Dims>
+struct is_unit<unit<T, S, Dims...>> : std::true_type {};
+
+}  // namespace detail
+
+template <typename T>
+concept Unit = detail::is_unit<T>::value;
+
+namespace detail {
+
+template <Arithmetic, Scale, typename>
+struct unit_make_from_sorted;
+
+template <Arithmetic T, Scale S, Dimension... Dims>
+struct unit_make_from_sorted<T, S, list<Dims...>> : Type<unit<T, S, Dims...>> {
+};
+
+}  // namespace detail
+
+// Helper to make a unit from a dimension list<...>.
+template <Arithmetic T, Scale S, List L>
+using unit_make_from_sorted_t = detail::unit_make_from_sorted<T, S, L>::type;
+
 // Main way for users to make units. Makes a unit type by simplifying and
 // sorting the dimensions and simplifying the scale.
 template <Arithmetic T, Scale S, Dimension... Dims>
@@ -758,6 +664,97 @@ using unit_scaled =
     unit_make_from_sorted_t<typename U::value_type,
                             scale_multiply_t<S, typename U::scale_factor>,
                             typename U::dimensions>;
+
+// Safe unit conversion but returns raw float, double, etc
+template <Unit To, Unit From>
+[[nodiscard]] constexpr auto raw_convert(
+    From const x) requires dimension_equal_v<To, From> {
+    return scale_convert<typename From::scale_factor,
+                         typename To::scale_factor>(x.get());
+}
+
+// Dimension safe unit conversion -- arithmetic type of unit may not equal
+// To::value_type e.g. decltype(return) != To in all cases.
+template <Unit To, Unit From>
+[[nodiscard]] constexpr auto convert(
+    From const x) requires dimension_equal_v<To, From> {
+    return unit_make_from_sorted_t<decltype(raw_convert<To>(x)),
+                                   typename To::scale_factor,
+                                   typename To::dimensions>{raw_convert<To>(x)};
+}
+
+// Overloading to accept unit<> which holds ::dimension = list<Dims...>
+template <Unit A, Unit B>
+inline constexpr bool dimension_equal_v<A, B> =
+    detail::dimension_equal<typename A::dimensions,
+                            typename B::dimensions>::value;
+
+// The libraries central type.
+template <Arithmetic T, Scale S, Dimension... Dims>
+class unit {
+   public:
+    using value_type = T;
+    using scale_factor = S;
+    using dimensions = list<Dims...>;
+
+    static_assert((... && (Dims::num != 0)),
+                  "Unit dimension exponents cannot be zero.");
+
+    static_assert(ordered_v<dimensions>,
+                  "Unit dimensions must satisfy strict ordering.");
+
+    unit() = default;
+    unit(unit const &) = default;
+    unit(unit &&) = default;
+
+    unit &operator=(unit const &) = default;
+    unit &operator=(unit &&) = default;
+
+    constexpr explicit unit(Arithmetic value) : m_value{value} {};
+
+    template <Unit U>
+    requires dimension_equal_v<unit, U> constexpr explicit unit(U const &other)
+        : m_value{raw_convert<unit>(other)} {}
+
+    template <Unit U>
+    requires dimension_equal_v<unit, U> constexpr unit &operator=(
+        U const &other) {
+        m_value = raw_convert<unit>(other);
+        return *this;
+    }
+
+#ifdef UNIT_SCALAR_IMPLICIT_CONVERSION
+    // Implicit conversions are dangerous but useful for scalar -> sine(x) etc.
+    inline constexpr operator value_type() const requires S::num == 1 &&
+        S::den == 1 && S::exp == 0 && sizeof...(Dims) == 0 {
+        return m_value;
+    }
+#endif
+
+    [[nodiscard]] inline constexpr value_type get() const noexcept {
+        return m_value;
+    }
+
+    [[nodiscard]] inline static constexpr std::string_view symbol() noexcept {
+        return m_symbol.view();
+    }
+
+   private:
+    value_type m_value;
+
+    // Symbol contains scale info and dimension symbols / exponents.
+    static constexpr fs::fixed_string m_symbol =
+        join(anotate<S>(), anotate<Dims>()...);
+};
+
+// Deduction to default to scalar unit.
+template <typename T>
+unit(T)->unit<T, scale<>>;
+
+// cout unit
+std::ostream &operator<<(std::ostream &os, const Unit &obj) {
+    return os << obj.get();
+}
 
 ///////////////////////////  operators ////////////////////////////
 
@@ -792,6 +789,14 @@ constexpr inline auto operator*(A lhs, B rhs) {
     return unit_t{lhs.get() * rhs.get()};
 }
 
+constexpr inline auto operator*(Unit lhs, Arithmetic rhs) {
+    return lhs * unit{rhs};
+}
+
+constexpr inline auto operator*(Arithmetic lhs, Unit rhs) {
+    return unit{lhs} * rhs;
+}
+
 template <Arithmetic Tl, Scale Sl, Dimension... Dl, Arithmetic Tr, Scale Sr,
           Dimension... Dr>
 constexpr inline auto operator/(unit<Tl, Sl, Dl...> lhs,
@@ -806,55 +811,12 @@ constexpr inline auto operator/(unit<Tl, Sl, Dl...> lhs,
     return unit_t{lhs.get() / rhs.get()};
 }
 
+constexpr inline auto operator/(Unit lhs, Arithmetic rhs) {
+    return lhs / unit{rhs};
+}
+
+constexpr inline auto operator/(Arithmetic lhs, Unit rhs) {
+    return unit{lhs} / rhs;
+}
+
 }  // namespace unit
-
-/////////////////////////// SI base units   ////////////////////////////
-
-namespace si {
-
-// '_d' suffix marks dimension .
-
-template <std::intmax_t... Is>
-struct meter_d : unit::DimensionBase<"m", Is...> {};
-
-template <std::intmax_t... Is>
-struct second_d : unit::DimensionBase<"s", Is...> {};
-
-template <std::intmax_t... Is>
-struct kilogram_d : unit::DimensionBase<"kg", Is...> {};
-
-template <std::intmax_t... Is>
-struct ampere_d : unit::DimensionBase<"A", Is...> {};
-
-template <std::intmax_t... Is>
-struct kelvin_d : unit::DimensionBase<"K", Is...> {};
-
-template <std::intmax_t... Is>
-struct mole_d : unit::DimensionBase<"mol", Is...> {};
-
-template <std::intmax_t... Is>
-struct candela_d : unit::DimensionBase<"cd", Is...> {};
-
-// base units
-
-// template <typename T>
-// using meter = unit::unit<T, unit::scale<>, si::meter_d<>>;
-
-template <typename T>
-using kilogram = unit::unit<T, unit::scale<>, si::kilogram_d<>>;
-
-// derived units
-
-constexpr unit::unit<int, unit::scale<>, si::meter_d<>> meter{1};
-
-namespace prefix {
-
-using kilo = unit::scale<3>;
-using nano = unit::scale<-9>;
-
-}  // namespace prefix
-
-template <unit::Unit U>
-using kilo = unit::unit_scaled<prefix::kilo, U>;
-
-}  // namespace si
