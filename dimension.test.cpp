@@ -2,6 +2,6 @@
 #define DOCTEST_CONFIG_SUPER_FAST_ASSERTS
 #include "doctest.h"
 
-#include "unit.hpp"
+#include "dimension.hpp"
 
 using namespace unit;
