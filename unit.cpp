@@ -2,17 +2,20 @@
 
 #include "si_units.hpp"
 
+using namespace si;
+
 auto speed(Length x, Time t) { return x / t; }
 
 int main() {
-    Length x = 9 * meter;
-    Time t = 5 * second;
+  watt_t<int> power{45};
 
-    using velocity = decltype(meter / second);
+  candela_t<int> energy{4};
 
-    velocity v = speed(x, t);
+  auto t = power / energy;
 
-    std::cout << v << ' ' << v.symbol() << std::endl;
+  // t = t * t;
 
-    return 0;
+  std::cout << t << ' ' << t.symbol() << std::endl;
+
+  return 0;
 }

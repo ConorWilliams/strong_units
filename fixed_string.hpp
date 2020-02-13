@@ -134,7 +134,7 @@ constexpr int compare(fixed_string<I> lhs, fixed_string<J> rhs) {
 
 namespace detail {
 
-template <std::size_t base>
+template <int base>
     requires base > 1 constexpr std::size_t num_digits(std::intmax_t x) {
     return x < 0 ? 1 + num_digits<base>(-x)
                  : x < base ? 1 : 1 + num_digits<base>(x / base);
@@ -143,7 +143,7 @@ template <std::size_t base>
 inline constexpr fixed_string digits = {
     "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"};
 
-template <std::intmax_t integer, std::size_t base>
+template <std::intmax_t integer, int base>
         requires base > 1 &&
     base < digits.size() + 1 constexpr auto ito_fs() {
     //
@@ -168,7 +168,7 @@ template <std::intmax_t integer, std::size_t base>
 }  // namespace detail
 
 // Convert an integer to a fixed_string  at compile time (in arbitrary base).
-template <std::intmax_t integer, std::size_t base = 10>
+template <std::intmax_t integer, int base = 10>
 inline constexpr fixed_string ito_fs = detail::ito_fs<integer, base>();
 
 }  // namespace fs

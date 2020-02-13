@@ -97,6 +97,27 @@ template <Unit To, Unit From>
                                    typename To::dimensions>{raw_convert<To>(x)};
 }
 
+// Join annotated scale and dimensions with correct spaces.
+template <typename Head, typename... Tail>
+inline constexpr auto join(Head head, Tail... tail) {
+    using namespace fs;  // for string literal operator
+
+    if constexpr (sizeof...(Tail) == 0) {
+        if constexpr (Head::size() == 0) {
+            return "dimensionless"_fs;
+        } else {
+            return head + " dimensionless"_fs;
+        }
+    } else {
+        if constexpr (Head::size() == 0) {
+            // Skip head, need ""_fs for case tail.size() = 1
+            return join(tail..., ""_fs);
+        } else {
+            return fixed_string{head, (" "_fs + tail)...};
+        }
+    }
+}
+
 // Overloading to accept unit<> which holds ::dimension = list<Dims...>
 template <Unit A, Unit B>
 inline constexpr bool dimension_equal_v<A, B> =
