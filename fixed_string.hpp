@@ -20,6 +20,11 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
+#if __cplusplus <= 201703L
+#error Requires GCC and -std=c++2a
+#include <stops_compilation>
+#endif
+
 #include <array>
 #include <cstddef>  // std::size_t
 #include <cstdint>  // std::intmax_t
@@ -36,7 +41,8 @@ namespace fs {
 // inherits from std::array and therefore inherits all its iterating goodness!
 //
 // Deduction guides are provided such that the template parameter N should
-// almost never have to be explicitly provided.
+// almost never have to be explicitly provided, as well as a user defined
+// literal allowing for the short syntax "string"_fs.
 template <std::size_t N>
 struct fixed_string : std::array<char, N> {
     //
@@ -71,19 +77,13 @@ struct fixed_string : std::array<char, N> {
         *this = (... + args);
     }
 
-    // Get a view of a sub-string. Python like syntax including negative index
-    constexpr std::string_view view(std::size_t start = 0) const noexcept {
-        return {data() + start, N - start};
-    }
-    constexpr std::string_view view(std::size_t start, int end) const noexcept {
-        if (end > 0) {
-            return {data() + start, end - start};
-        } else {
-            return {data() + start, (N + end) - start};
-        }
+    // Get a view of a sub-string.
+    inline constexpr std::string_view view(std::size_t start = 0,
+                                           int end = N) const noexcept {
+        return {data() + start, end - start};
     }
 
-    static constexpr std::size_t size() { return N; }
+    inline static constexpr std::size_t size() { return N; }
 };
 
 template <std::size_t N>
@@ -94,11 +94,17 @@ fixed_string()->fixed_string<0>;
 template <std::size_t... Is>
 fixed_string(fixed_string<Is>...)->fixed_string<(... + Is)>;
 
+// C++20 string literal operator template : "abc"_fs -> fixed_string{"abc"}
+template <fixed_string str>
+inline constexpr auto operator"" _fs() {
+    return str;
+}
+
 // + operator used for fixed_string concatenation
 template <std::size_t I, std::size_t J>
-constexpr fixed_string<I + J> operator+(fixed_string<I> const& lhs,
-                                        fixed_string<J> const& rhs) {
-    return {lhs, rhs};
+inline constexpr auto operator+(fixed_string<I> const& lhs,
+                                fixed_string<J> const& rhs) {
+    return fixed_string{lhs, rhs};
 }
 
 template <std::size_t N>
@@ -134,7 +140,7 @@ template <std::size_t base>
                  : x < base ? 1 : 1 + num_digits<base>(x / base);
 }
 
-constexpr fixed_string digits = {
+inline constexpr fixed_string digits = {
     "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"};
 
 template <std::intmax_t integer, std::size_t base>
@@ -143,11 +149,13 @@ template <std::intmax_t integer, std::size_t base>
     //
     fixed_string<detail::num_digits<base>(integer)> result;
 
-    std::intmax_t num = integer < 0 ? -integer : integer;
+    {
+        std::intmax_t num = integer < 0 ? -integer : integer;
 
-    for (auto&& it = result.rbegin(); it != result.rend(); ++it) {
-        *it = digits[num % base];
-        num /= base;
+        for (auto&& it = result.rbegin(); it != result.rend(); ++it) {
+            *it = digits[num % base];
+            num /= base;
+        }
     }
 
     if constexpr (integer < 0) {

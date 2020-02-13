@@ -25,13 +25,12 @@
 #include <cstdint>  // std::intmax_t
 #include <ostream>
 #include <ratio>
+#include <stdexcept>
 #include <type_traits>
 
 #include "fixed_string.hpp"
 
 namespace unit {
-
-using namespace fs;
 
 // Lightweight list type required to separate parameter packs
 template <typename... Ts>
@@ -102,7 +101,7 @@ struct scale<I, J, K> : ScaleBase<I, J, K> {};
 
 namespace detail {
 
-enum : int { multiply, done, divide };
+enum { multiply, done, divide };
 
 template <typename Ratio>
 constexpr int standard_direction() {
@@ -129,12 +128,16 @@ constexpr int standard_direction() {
     }
 }
 
-// forward declaration for match
+// forward declaration for standard_form_impl
+template <int C, std::intmax_t Exp, typename Ratio>
+struct standard_match;
+
 template <std::intmax_t Exp, typename Ratio>
 struct standard_form_impl;
 
-template <int C, std::intmax_t Exp, typename Ratio>
-struct standard_match;
+template <std::intmax_t Exp, typename Ratio>
+struct standard_form_impl
+    : standard_match<standard_direction<Ratio>(), Exp, Ratio> {};
 
 // end condition
 template <std::intmax_t Exp, typename Ratio>
@@ -150,10 +153,6 @@ template <std::intmax_t Exp, typename Ratio>
 struct standard_match<multiply, Exp, Ratio>
     : standard_form_impl<Exp - 1, std::ratio_multiply<Ratio, std::ratio<10>>> {
 };
-
-template <std::intmax_t Exp, typename Ratio>
-struct standard_form_impl
-    : standard_match<standard_direction<Ratio>(), Exp, Ratio> {};
 
 }  // namespace detail
 
@@ -185,7 +184,7 @@ struct scale_make_help {
 
 }  // namespace detail
 
-// returns the most minimal possible scale type in standard form
+// Returns the most minimal possible scale type in standard form
 template <std::intmax_t I = 0, std::intmax_t J = 1, std::intmax_t K = 1>
 using scale_make = detail::scale_make_help<I, J, K>::type;
 
@@ -212,6 +211,41 @@ using scale_multiply_t = detail::scale_multiply<A, B>::type;
 
 template <Scale A, Scale B>
 using scale_divide_t = detail::scale_divide<A, B>::type;
+
+namespace detail {
+
+#ifdef __GNUG__
+#define UNIT_CONST_FUNCTION_ATTRIBUTE __attribute__((const))
+#else
+#define UNIT_CONST_FUNCTION_ATTRIBUTE
+#endif
+
+// Constexpr integral pow function
+template <std::intmax_t exponent, typename T>
+UNIT_CONST_FUNCTION_ATTRIBUTE constexpr auto pow_impl(T x) {
+    if constexpr (exponent == 0) {
+        if (x == 0) {
+            throw std::invalid_argument("pow<0>(0) is undefined");
+        } else {
+            return 1;
+        }
+    } else if constexpr (exponent == 1) {
+        return x;
+    } else if constexpr (exponent % 2 == 0) {
+        return pow<x / 2>(x) * pow<x / 2>(x);
+    } else {
+        return pow<x / 2>(x) * pow<x / 2>(x) * x;
+    }
+}
+
+template <std::intmax_t exponent, typename T>
+constexpr auto pow(T x) {
+    if constexpr (exponent > 0) {
+        return
+    }
+}
+
+}  // namespace detail
 
 // Could be generalised to arbitrary scale<...> !
 template <Scale From, Scale To, Arithmetic T>
@@ -257,14 +291,14 @@ struct dimension_tag {};  // Marks class as being a dimension type.
 }  // namespace detail
 
 // Defaults required for variadic instantiation
-template <fixed_string Str, std::intmax_t I = 1, std::intmax_t J = 1>
+template <fs::fixed_string Str, std::intmax_t I = 1, std::intmax_t J = 1>
 struct DimensionBase : private detail::dimension_tag {
     using exp = std::ratio<I, J>;
 
     static constexpr std::intmax_t num = exp::num;
     static constexpr std::intmax_t den = exp::den;
 
-    static constexpr fixed_string symbol = Str;
+    static constexpr fs::fixed_string symbol = Str;
 };
 
 template <typename T>
@@ -313,23 +347,26 @@ inline constexpr bool dimension_equal_v = detail::dimension_equal<A, B>::value;
 
 namespace detail {
 
-template <typename>
+template <typename, std::intmax_t, std::intmax_t>
 struct dimension_simplify;
 
+template <template <std::intmax_t...> typename Dim, std::intmax_t I,
+          std::intmax_t J, std::intmax_t... Is>
+struct dimension_simplify<Dim<Is...>, I, J> : Type<Dim<I, J>> {};
+
+template <template <std::intmax_t...> typename Dim, std::intmax_t I,
+          std::intmax_t... Is>
+struct dimension_simplify<Dim<Is...>, I, 1> : Type<Dim<I>> {};
+
 template <template <std::intmax_t...> typename Dim, std::intmax_t... Is>
-struct dimension_simplify<Dim<Is...>> {
-    using exponent = Dim<Is...>::exp;
-    using type = std::conditional_t<
-        exponent::den == 1,
-        std::conditional_t<exponent::num == 1, Dim<>, Dim<exponent::num>>,
-        Dim<exponent::num, exponent::den>>;
-};
+struct dimension_simplify<Dim<Is...>, 1, 1> : Type<Dim<>> {};
 
 }  // namespace detail
 
 // Converts a dimensions into its shortest possible version representation
 template <Dimension D>
-using dimension_simplify_t = detail::dimension_simplify<D>::type;
+using dimension_simplify_t =
+    detail::dimension_simplify<D, D::num, D::den>::type;
 
 namespace detail {
 template <typename, typename>
@@ -394,30 +431,31 @@ struct ordered_impl<list<First, Second, Tail...>> {
 template <List L>
 inline constexpr bool ordered_v = detail::ordered_impl<L>::value;
 
-// extracts symbol from dimension and returns symbol as a static string
-// decorated with exponent info if required.
+// Extracts symbol from dimension and returns symbol as a static string
+// decorated with exponent in minimal "symbol^x/y" like form.
 template <Dimension D>
 inline constexpr auto anotate() {
+    using namespace fs;  // for string literal operator
+
     constexpr std::intmax_t num = D::num;
     constexpr std::intmax_t den = D::den;
 
-    constexpr fixed_string space = " ";
-
     if constexpr (num == 1 && den == 1) {
-        return space + D::symbol;
+        return D::symbol;
 
     } else if constexpr (num != 1 && den == 1) {
-        return space + D::symbol + fixed_string{"^"} + ito_fs<num>;
+        return D::symbol + "^"_fs + ito_fs<num>;
 
     } else if constexpr (den != 1) {
-        return space + D::symbol + fixed_string{"^"} + ito_fs<num> +
-               fixed_string{"/"} + ito_fs<den>;
+        return D::symbol + "^"_fs + ito_fs<num> + "/"_fs + ito_fs<den>;
     }
 }
 
-// stringifys a scale<> into a minimal " (a/b x 10^c)" like form.
+// Stringifys a scale<> into a minimal "(a/b x 10^c)" like form.
 template <Scale S>
 inline constexpr auto anotate() {
+    using namespace fs;  // for string literal operator
+
     constexpr std::intmax_t num = S::num;
     constexpr std::intmax_t den = S::den;
     constexpr std::intmax_t exp = S::exp;
@@ -425,32 +463,50 @@ inline constexpr auto anotate() {
     if constexpr (exp == 0) {
         if constexpr (den == 1) {
             if constexpr (num == 1) {
-                return fixed_string{""};
+                return ""_fs;
             } else {
-                return fixed_string{" ("} + ito_fs<num> + fixed_string{")"};
+                return "("_fs + ito_fs<num> + ")"_fs;
             }
         } else {
-            return fixed_string{" ("} + ito_fs<num> + fixed_string{"/"} +
-                   ito_fs<den> + fixed_string{")"};
+            return "("_fs + ito_fs<num> + "/"_fs + ito_fs<den> + ")"_fs;
         }
     } else {
         if constexpr (den == 1) {
             if constexpr (num == 1) {
-                return fixed_string{" ("} + fixed_string{"10^"} + ito_fs<exp> +
-                       fixed_string{")"};
+                return "(10^"_fs + ito_fs<exp> + ")"_fs;
             } else {
-                return fixed_string{" ("} + ito_fs<num> +
-                       fixed_string{" x 10^"} + ito_fs<exp> + fixed_string{")"};
+                return "("_fs + ito_fs<num> + " x 10^"_fs + ito_fs<exp> +
+                       ")"_fs;
             }
         } else {
-            return fixed_string{" ("} + ito_fs<num> + fixed_string{"/"} +
-                   ito_fs<den> + fixed_string{" x 10^"} + ito_fs<exp> +
-                   fixed_string{")"};
+            return "("_fs + ito_fs<num> + "/"_fs + ito_fs<den> + " x 10^"_fs +
+                   ito_fs<exp> + ")"_fs;
         }
     }
 }
 
-// forward declaration for concept
+// Join annotated scale and dimensions with correct spaces.
+template <typename Head, typename... Tail>
+inline constexpr auto join(Head head, Tail... tail) {
+    using namespace fs;  // for string literal operator
+
+    if constexpr (sizeof...(Tail) == 0) {
+        if constexpr (Head::size() == 0) {
+            return "dimensionless"_fs;
+        } else {
+            return head + " dimensionless"_fs;
+        }
+    } else {
+        if constexpr (Head::size() == 0) {
+            // Skip head, need ""_fs for case tail.size() = 1
+            return join(tail..., ""_fs);
+        } else {
+            return fixed_string{head, (" "_fs + tail)...};
+        }
+    }
+}
+
+// Forward declaration for concept
 template <Arithmetic T, Scale S, Dimension... Dims>
 class unit;
 
@@ -521,12 +577,13 @@ class unit {
         S::den == 1 && S::exp == 0 && sizeof...(Dims) == 0 {
         return m_value;
     }
-
 #endif
 
-    inline constexpr value_type get() const noexcept { return m_value; }
+    [[nodiscard]] inline constexpr value_type get() const noexcept {
+        return m_value;
+    }
 
-    static constexpr std::string_view symbol() noexcept {
+    [[nodiscard]] inline static constexpr std::string_view symbol() noexcept {
         return m_symbol.view();
     }
 
@@ -534,38 +591,40 @@ class unit {
     value_type m_value;
 
     // Symbol contains scale info and dimension symbols / exponents.
-    static constexpr fixed_string m_symbol = {anotate<S>(), anotate<Dims>()...};
+    static constexpr fs::fixed_string m_symbol =
+        join(anotate<S>(), anotate<Dims>()...);
 };
 
+// Deduction to default to scalar unit.
 template <typename T>
 unit(T)->unit<T, scale<>>;
 
 namespace detail {
 
 template <Arithmetic, Scale, typename>
-struct make_unit_from_sorted;
+struct unit_make_from_sorted;
 
 template <Arithmetic T, Scale S, Dimension... Dims>
-struct make_unit_from_sorted<T, S, list<Dims...>> : Type<unit<T, S, Dims...>> {
+struct unit_make_from_sorted<T, S, list<Dims...>> : Type<unit<T, S, Dims...>> {
 };
 
 }  // namespace detail
 
 // Helper to make a unit from a dimension list<...>.
 template <Arithmetic T, Scale S, List L>
-using make_unit_from_sorted_t = detail::make_unit_from_sorted<T, S, L>::type;
+using unit_make_from_sorted_t = detail::unit_make_from_sorted<T, S, L>::type;
 
 // Dimension safe unit conversion -- arithmetic type of unit may not equal
 // To::value_type e.g. decltype(return) != To in all cases.
 template <Unit To, Unit From>
 [[nodiscard]] constexpr auto convert(
     From const x) requires dimension_equal_v<To, From> {
-    return make_unit_from_sorted_t<decltype(raw_convert<To>(x)),
+    return unit_make_from_sorted_t<decltype(raw_convert<To>(x)),
                                    typename To::scale_factor,
                                    typename To::dimensions>{raw_convert<To>(x)};
 }
 
-// cout unit with symbol
+// cout unit
 std::ostream &operator<<(std::ostream &os, const Unit &obj) {
     return os << obj.get() << obj.symbol();
 }
@@ -688,14 +747,15 @@ using sort_t = detail::sort_impl<list<>, list<Dims>...>::type;
 // Main way for users to make units. Makes a unit type by simplifying and
 // sorting the dimensions and simplifying the scale.
 template <Arithmetic T, Scale S, Dimension... Dims>
-using make = make_unit_from_sorted_t<T, scale_make<S::exp, S::num, S::den>,
-                                     sort_t<dimension_simplify_t<Dims>...>>;
+using unit_make =
+    unit_make_from_sorted_t<T, scale_make<S::exp, S::num, S::den>,
+                            sort_t<dimension_simplify_t<Dims>...>>;
 
 // Secondary way for users to make units. Makes a unit type by rescaling an
 // existing unit type.
 template <Scale S, Unit U>
-using make_scaled =
-    make_unit_from_sorted_t<typename U::value_type,
+using unit_scaled =
+    unit_make_from_sorted_t<typename U::value_type,
                             scale_multiply_t<S, typename U::scale_factor>,
                             typename U::dimensions>;
 
@@ -705,7 +765,7 @@ template <Unit A, Unit B>
 constexpr inline auto operator+(A const lhs,
                                 B const rhs) requires dimension_equal_v<A, B> {
     using unit_t =
-        make_unit_from_sorted_t<decltype(lhs.get() + raw_convert<A>(rhs)),
+        unit_make_from_sorted_t<decltype(lhs.get() + raw_convert<A>(rhs)),
                                 typename A::scale_factor,
                                 typename A::dimensions>;
 
@@ -715,7 +775,7 @@ constexpr inline auto operator+(A const lhs,
 template <Unit A, Unit B>
 constexpr inline auto operator-(A lhs, B rhs) requires dimension_equal_v<A, B> {
     using unit_t =
-        make_unit_from_sorted_t<decltype(lhs.get() - raw_convert<A>(rhs)),
+        unit_make_from_sorted_t<decltype(lhs.get() - raw_convert<A>(rhs)),
                                 typename A::scale_factor,
                                 typename A::dimensions>;
 
@@ -724,7 +784,7 @@ constexpr inline auto operator-(A lhs, B rhs) requires dimension_equal_v<A, B> {
 
 template <Unit A, Unit B>
 constexpr inline auto operator*(A lhs, B rhs) {
-    using unit_t = make_unit_from_sorted_t<
+    using unit_t = unit_make_from_sorted_t<
         decltype(lhs.get() * rhs.get()),
         scale_multiply_t<typename A::scale_factor, typename B::scale_factor>,
         merge_sum_sorted_t<typename A::dimensions, typename B::dimensions>>;
@@ -740,7 +800,7 @@ constexpr inline auto operator/(unit<Tl, Sl, Dl...> lhs,
         merge_sum_sorted_t<list<Dl...>,
                            list<dimension_multiply_t<Dr, std::ratio<-1>>...>>;
 
-    using unit_t = make_unit_from_sorted_t<decltype(lhs.get() / rhs.get()),
+    using unit_t = unit_make_from_sorted_t<decltype(lhs.get() / rhs.get()),
                                            scale_divide_t<Sl, Sr>, dimensions>;
 
     return unit_t{lhs.get() / rhs.get()};
@@ -795,6 +855,6 @@ using nano = unit::scale<-9>;
 }  // namespace prefix
 
 template <unit::Unit U>
-using kilo = unit::make_scaled<prefix::kilo, U>;
+using kilo = unit::unit_scaled<prefix::kilo, U>;
 
 }  // namespace si
