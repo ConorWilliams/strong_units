@@ -29,6 +29,10 @@
 
 namespace unit {
 
+namespace detail {
+struct unit_tag {};
+}  // namespace detail
+
 template <typename T>
 concept Arithmetic = std::is_arithmetic_v<T>;
 
@@ -36,18 +40,18 @@ concept Arithmetic = std::is_arithmetic_v<T>;
 template <Arithmetic T, Scale S, Dimension... Dims>
 class unit;
 
-namespace detail {
+// namespace detail {
 
-template <typename>
-struct is_unit : std::false_type {};
+// template <typename>
+// struct is_unit : std::false_type {};
 
-template <Arithmetic T, Scale S, Dimension... Dims>
-struct is_unit<unit<T, S, Dims...>> : std::true_type {};
+// template <Arithmetic T, Scale S, Dimension... Dims>
+// struct is_unit<unit<T, S, Dims...>> : std::true_type {};
 
-}  // namespace detail
+// }  // namespace detail
 
 template <typename T>
-concept Unit = detail::is_unit<T>::value;
+concept Unit = std::is_base_of_v<detail::unit_tag, T>;
 
 namespace detail {
 
@@ -128,7 +132,7 @@ inline constexpr bool dimension_equal_v<A, B> =
 
 // The libraries central type.
 template <Arithmetic T, Scale S, Dimension... Dims>
-class unit {
+class unit : private detail::unit_tag {
    public:
     using value_type = T;
     using scale_factor = S;
