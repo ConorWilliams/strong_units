@@ -1,17 +1,17 @@
-#pragma once
-
+// The MIT License (MIT)
+//
 // Copyright (c) 2020 Conor Williams
-
+//
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
 // in the Software without restriction, including without limitation the rights
 // to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
 // copies of the Software, and to permit persons to whom the Software is
 // furnished to do so, subject to the following conditions:
-
+//
 // The above copyright notice and this permission notice shall be included in
 // all copies or substantial portions of the Software.
-
+//
 // THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 // IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
 // FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
@@ -19,6 +19,8 @@
 // LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
+
+#pragma once
 
 #include <cstddef>  // std::size_t
 #include <cstdint>  // std::intmax_t
@@ -28,7 +30,7 @@
 #include "fixed_string.hpp"
 #include "scale.hpp"  // Type<>
 
-namespace unit {
+namespace su {
 
 // Lightweight list type required to separate parameter packs
 template <typename... Ts>
@@ -156,6 +158,15 @@ namespace detail {
 template <typename, typename>
 struct dimension_multiply;
 
+}
+
+// Returns new dimension with same type but and new exponent equal to the
+// product of std::ratio O and the argument dimensions' exponent.
+template <typename D, typename Ratio>
+using dimension_multiply_t = detail::dimension_multiply<D, Ratio>::type;
+
+namespace detail {
+
 template <template <std::intmax_t...> typename Dim, std::intmax_t... Is,
           typename Ratio>
 struct dimension_multiply<Dim<Is...>, Ratio> {
@@ -163,12 +174,11 @@ struct dimension_multiply<Dim<Is...>, Ratio> {
     using type = dimension_simplify_t<Dim<product::num, product::den>>;
 };
 
-}  // namespace detail
+template <typename Ratio, Dimension... Dims>
+struct dimension_multiply<list<Dims...>, Ratio>
+    : Type<list<dimension_multiply_t<Dims, Ratio>...>> {};
 
-// Returns new dimension with same type but and new exponent equal to the
-// product of std::ratio O and the argument dimensions' exponent.
-template <Dimension D, typename Ratio>
-using dimension_multiply_t = detail::dimension_multiply<D, Ratio>::type;
+}  // namespace detail
 
 // Extracts symbol from dimension and returns symbol as a static string
 // decorated with exponent in minimal "symbol^x/y" like form.
@@ -330,4 +340,4 @@ struct sort_impl<Working, First, Second, Tail...>
 template <Dimension... Dims>
 using sort_t = detail::sort_impl<list<>, list<Dims>...>::type;
 
-}  // namespace unit
+}  // namespace su

@@ -52,16 +52,16 @@ TEST_CASE("standard form") {
 }
 
 TEST_CASE("scale_make") {
-    CHECK(std::is_same_v<scale_make<0, 1, 3>, scale<-1, 10, 3>>);
-    CHECK(std::is_same_v<scale_make<0, 2, 1>, scale<0, 2>>);
-    CHECK(std::is_same_v<scale_make<4, 1, 1>, scale<4>>);
-    CHECK(std::is_same_v<scale_make<0, 1, 1>, scale<>>);
+    CHECK(std::is_same_v<scale_make<1, 3, 0>, scale<10, 3, -1>>);
+    CHECK(std::is_same_v<scale_make<7, 4, 0>, scale<7, 4>>);
+    CHECK(std::is_same_v<scale_make<2, 1, 0>, scale<2>>);
+    CHECK(std::is_same_v<scale_make<1, 1, 0>, scale<>>);
 }
 
 TEST_CASE("scale / & *") {
-    using one = scale_make<0, 1, 1>;
-    using five = scale_make<0, 5, 1>;
-    using twenty_five = scale_make<0, 25, 1>;
+    using one = scale_make<1, 1, 0>;
+    using five = scale_make<5, 1, 0>;
+    using twenty_five = scale_make<25, 1, 0>;
 
     CHECK(std::is_same_v<scale_multiply_t<one, one>, one>);
     CHECK(std::is_same_v<scale_multiply_t<one, five>, five>);
@@ -69,7 +69,7 @@ TEST_CASE("scale / & *") {
     CHECK(std::is_same_v<scale_multiply_t<five, five>, twenty_five>);
 
     CHECK(std::is_same_v<scale_divide_t<one, one>, one>);
-    CHECK(std::is_same_v<scale_divide_t<one, five>, scale_make<0, 1, 5>>);
+    CHECK(std::is_same_v<scale_divide_t<one, five>, scale_make<1, 5>>);
     CHECK(std::is_same_v<scale_divide_t<five, one>, five>);
     CHECK(std::is_same_v<scale_divide_t<five, five>, one>);
     CHECK(std::is_same_v<scale_divide_t<twenty_five, five>, five>);

@@ -1,17 +1,17 @@
-#pragma once
-
+// The MIT License (MIT)
+//
 // Copyright (c) 2020 Conor Williams
-
+//
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
 // in the Software without restriction, including without limitation the rights
 // to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
 // copies of the Software, and to permit persons to whom the Software is
 // furnished to do so, subject to the following conditions:
-
+//
 // The above copyright notice and this permission notice shall be included in
 // all copies or substantial portions of the Software.
-
+//
 // THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 // IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
 // FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
@@ -20,13 +20,15 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
+#pragma once
+
 #include <cstdint>  // std::intmax_t
 #include <ratio>
 #include <type_traits>
 
 #include "fixed_string.hpp"
 
-namespace unit {
+namespace su {
 
 // Convenience struct for inheriting: using type = ...
 template <typename T = void>
@@ -42,9 +44,9 @@ struct scale_tag {};  // marks class as being of scale type
 
 template <std::intmax_t I, std::intmax_t J, std::intmax_t K>
 struct ScaleBase : private detail::scale_tag {
-    using ratio = std::ratio<J, K>;
+    using ratio = std::ratio<I, J>;
 
-    static constexpr std::intmax_t exp = I;
+    static constexpr std::intmax_t exp = K;
     static constexpr std::intmax_t num = ratio::num;
     static constexpr std::intmax_t den = ratio::den;
 
@@ -62,13 +64,13 @@ struct scale {
 };
 
 template <>
-struct scale<> : ScaleBase<0, 1, 1> {};
+struct scale<> : ScaleBase<1, 1, 0> {};
 
 template <std::intmax_t I>
-struct scale<I> : ScaleBase<I, 1, 1> {};
+struct scale<I> : ScaleBase<I, 1, 0> {};
 
 template <std::intmax_t I, std::intmax_t J>
-struct scale<I, J> : ScaleBase<I, J, 1> {};
+struct scale<I, J> : ScaleBase<I, J, 0> {};
 
 template <std::intmax_t I, std::intmax_t J, std::intmax_t K>
 struct scale<I, J, K> : ScaleBase<I, J, K> {};
@@ -141,25 +143,25 @@ template <std::intmax_t I, std::intmax_t J, std::intmax_t K>
 struct scale_make_impl : Type<scale<I, J, K>> {};
 
 template <std::intmax_t I, std::intmax_t J>
-struct scale_make_impl<I, J, 1> : Type<scale<I, J>> {};
+struct scale_make_impl<I, J, 0> : Type<scale<I, J>> {};
 
 template <std::intmax_t I>
-struct scale_make_impl<I, 1, 1> : Type<scale<I>> {};
+struct scale_make_impl<I, 1, 0> : Type<scale<I>> {};
 
 template <>
-struct scale_make_impl<0, 1, 1> : Type<scale<>> {};
+struct scale_make_impl<1, 1, 0> : Type<scale<>> {};
 
 template <std::intmax_t I, std::intmax_t J, std::intmax_t K>
 struct scale_make_help {
-    using standard = standard_form<std::ratio<J, K>>;
-    using type = scale_make_impl<I + standard::exp, standard::type::num,
-                                 standard::type::den>::type;
+    using standard = standard_form<std::ratio<I, J>>;
+    using type = scale_make_impl<standard::type::num, standard::type::den,
+                                 K + standard::exp>::type;
 };
 
 }  // namespace detail
 
 // Returns the most minimal possible scale type in standard form
-template <std::intmax_t I = 0, std::intmax_t J = 1, std::intmax_t K = 1>
+template <std::intmax_t I = 1, std::intmax_t J = 1, std::intmax_t K = 0>
 using scale_make = detail::scale_make_help<I, J, K>::type;
 
 namespace detail {
@@ -167,13 +169,13 @@ namespace detail {
 template <Scale A, Scale B>
 struct scale_multiply {
     using product = std::ratio_multiply<typename A::ratio, typename B::ratio>;
-    using type = scale_make<A::exp + B::exp, product::num, product::den>;
+    using type = scale_make<product::num, product::den, A::exp + B::exp>;
 };
 
 template <Scale A, Scale B>
 struct scale_divide {
     using product = std::ratio_divide<typename A::ratio, typename B::ratio>;
-    using type = scale_make<A::exp - B::exp, product::num, product::den>;
+    using type = scale_make<product::num, product::den, A::exp - B::exp>;
 };
 
 }  // namespace detail
@@ -215,7 +217,7 @@ constexpr auto pow10() {
 // Could be generalised to arbitrary scale<...> !
 template <Scale From, Scale To, typename T>
 inline constexpr auto scale_convert(T const x) {
-    using conversion = scale_divide_t<From, To>;
+    using conversion = scale_divide_t<To, From>;
 
     constexpr std::intmax_t num = conversion::num;
     constexpr std::intmax_t den = conversion::den;
@@ -228,7 +230,7 @@ inline constexpr auto scale_convert(T const x) {
         } else if constexpr (num != 1 && den == 1) {
             return x * num;
         } else if constexpr (num == 1 && den != 1) {
-            return x / den;
+            return x / static_cast<double>(den);
         } else {
             return x * static_cast<double>(num) / den;
         }
@@ -282,4 +284,4 @@ inline constexpr auto anotate() {
     }
 }
 
-}  // namespace unit
+}  // namespace su
