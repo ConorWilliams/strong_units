@@ -22,7 +22,6 @@
 
 #pragma once
 
-#include <numeric>  // gcd
 #include <type_traits>
 
 #include "dimension.hpp"
@@ -121,36 +120,38 @@ struct named_unit : U {
     static constexpr fs::fixed_string m_symbol = Name;
 };
 
-template <Scale, typename>
-struct unit_make_from_sorted;
+template <bool, Scale, List>
+struct unit_make_impl;
 
+// sorted case
 template <Scale S, Dimension... Dims>
-struct unit_make_from_sorted<S, list<Dims...>> : Type<nameless<S, Dims...>> {};
+struct unit_make_impl<true, S, list<Dims...>> : Type<nameless<S, Dims...>> {};
+
+// unsorted case
+template <Scale S, Dimension... Dims>
+struct unit_make_impl<false, S, list<Dims...>>
+    : unit_make_impl<true, S, sort_t<Dims...>> {};
 
 }  // namespace detail
 
-// Helper to make a unit from a dimension list<...>.
+// Makes a unit type from a dimension list<...> by simplifying and sorting the
+// it and simplifying the scale.
 template <Scale S, List L>
-using unit_make_from_sorted_t = detail::unit_make_from_sorted<S, L>::type;
-
-// Makes a unit type by simplifying and sorting the dimensions and simplifying
-// the scale.
-template <Scale S, Dimension... Dims>
 using unit_make_t =
-    unit_make_from_sorted_t<scale_make<S::num, S::den, S::exp>,
-                            sort_t<dimension_simplify_t<Dims>...>>;
+    detail::unit_make_impl<ordered_v<L>, scale_make<S::num, S::den, S::exp>,
+                           L>::type;
 
 // *****************************************************************************
 // *                  User access points for making new units                  *
 // *****************************************************************************
 
 template <typename Target, Scale S, Dimension... Dims>
-struct unit : downcast_child<Target, unit_make_t<S, Dims...>> {};
+struct unit : downcast_child<Target, unit_make_t<S, list<Dims...>>> {};
 
 template <typename Target, fs::fixed_string Sym, Scale S, Dimension... Dims>
 struct named_unit
-    : downcast_child<Target, detail::named_unit<Sym, unit_make_t<S, Dims...>>> {
-};
+    : downcast_child<Target,
+                     detail::named_unit<Sym, unit_make_t<S, list<Dims...>>>> {};
 
 ////////////////////////////////////////////////////////////////////////////////
 
@@ -161,41 +162,11 @@ inline constexpr bool dimension_equal_v<A, B> =
                             typename B::dimensions>::value;
 
 // Safe unit conversion but returns raw float, double, etc
-template <Unit To, Unit From>
+template <Unit From, Unit To>
 [[nodiscard]] constexpr auto raw_convert(
-    auto x) requires dimension_equal_v<To, From> {
+    auto x) requires dimension_equal_v<From, To> {
     return scale_convert<typename From::scale_factor,
                          typename To::scale_factor>(x);
 }
-
-namespace detail {
-
-template <Unit U1, Unit U2>
-struct common_unit_impl {
-    static constexpr std::intmax_t gcd_num =
-        std::gcd(U1::scale_factor::num, U2::scale_factor::num);
-
-    static constexpr std::intmax_t gcd_den =
-        std::gcd(U1::scale_factor::den, U2::scale_factor::den);
-
-    using common_scale = scale_make<
-        gcd_num, (U1::scale_factor::den / gcd_den) * U2::scale_factor::den,
-        U1::scale_factor::exp <= U2::scale_factor::exp ? U1::scale_factor::exp
-                                                       : U2::scale_factor::exp>;
-
-    using type = unit_make_from_sorted_t<common_scale, typename U1::dimensions>;
-};
-
-// Short-cut for same units
-template <Unit U>
-struct common_unit_impl<U, U> : Type<U> {};
-
-}  // namespace detail
-
-// Returns the unit with a scale factor that is the greatest common multiple of
-// U1 and U2's scale factors
-template <Unit U1, Unit U2>
-requires dimension_equal_v<U1, U2> using common_unit =
-    detail::common_unit_impl<U1, U2>::type;
 
 }  // namespace su

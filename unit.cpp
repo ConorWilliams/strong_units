@@ -121,65 +121,48 @@ struct kilometres : su::named_unit<kilometres, "km",  su::scale<1,1,3>,  length<
 
 struct meters_per_second : su::unit<meters_per_second, su::scale<>, length<>, time<-1>  > {};
 
-// clang format on
-}
+// clang-format on
+
+}  // namespace si
 
 #include <numeric>
 
 using su::quantity;
 
+struct a : su::named_unit<a, "a", su::scale<30, 7, -1>, si::length<>> {};
+struct b : su::named_unit<b, "b", su::scale<5, 2>, si::length<>> {};
+
+inline constexpr quantity<si::seconds, double> bear_oclock{12.};
+
 // quantity operators
 
 int main() {
-    // su::conor<int> t{1.};
+    quantity<a, double> m{1.};
 
-    quantity<si::metres, int> dist_to_pub{1};
-    quantity<si::seconds, int> bear_oclock{12};
+    quantity<b, double> km{1.};
 
-   quantity<si::kilometres, int> dist{2};
+    quantity<si::metres> sum = m + km;
 
-   auto k = (dist + dist_to_pub) * bear_oclock * quantity<si::kelvin, int>{8};
+    // int i = km + m;
 
-   auto b = 1 /  bear_oclock;
+    std::cout << m + km << ' ' << (m + km).base_symbol() << std::endl;
+    std::cout << km << ' ' << (km).symbol() << std::endl;
+    std::cout << sum << ' ' << (sum).symbol() << std::endl;
 
-   //int i = dist_to_pub * bear_oclock;
+    //
+    int num1 = 51;
+    int den1 = 10;
+    int Exp1 = 1;
 
-    //dist += dist_to_pub;
+    int num2 = 5;
+    int den2 = 1;
+    int Exp2 = 0;
 
-    std::cout << dist_to_pub << std::endl;
+    std::intmax_t gcd_num = std::gcd(num1, num2);
+    std::intmax_t gcd_den = std::gcd(den1, den2);
 
-
-   //int{23} < uint{8};
-
-   int num1 = 13;
-   int den1 = 4;
-   int Exp1 = 0;
-
-   int num2 = 3;
-   int den2 = 2;
-   int Exp2 = 1;
-
-  std::intmax_t gcd_num = std::gcd(num1, num2);
-  std::intmax_t gcd_den = std::gcd(den1, den2);
-
-
-  std::cout << gcd_num << '/' << (den1 / gcd_den) * den2 << '^' << std::min(Exp1, Exp2) << std::endl; 
-
-   //k + b;
-
-   //std::string_view lk = std::common_type_t<float, long>{};
-
-   //k + b;
-
-   //int i = decltype(k)::su::scale_factor{};
-
-    //int i = dist_to_pub;
-
-    // auto k = t;  // sum(t, t);
-
-    //int i = decltype(k)::unit{};
-
-     std::cout << k << ' ' << (k).base_symbol() << std::endl;
+    std::cout << gcd_num << '/' << (den1 / gcd_den) * den2 << '^'
+              << std::min(Exp1, Exp2) << std::endl;
 
     return 0;
 }

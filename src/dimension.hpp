@@ -337,7 +337,7 @@ struct sort_impl<Working, First, Second, Tail...>
 
 }  // namespace detail
 
-// Compile time bottom-up merge sort a parameter pack of dimensions
+// Compile time bottom-up merge sort a parameter pack of dimensions into a list
 template <Dimension... Dims>
 using sort_t = detail::sort_impl<list<>, list<Dims>...>::type;
 

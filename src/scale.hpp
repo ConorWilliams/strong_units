@@ -23,6 +23,7 @@
 #pragma once
 
 #include <cstdint>  // std::intmax_t
+#include <numeric>  // gcd
 #include <ratio>
 #include <type_traits>
 
@@ -215,9 +216,9 @@ constexpr auto pow10() {
 }  // namespace detail
 
 // Could be generalised to arbitrary scale<...> !
-template <Scale From, Scale To, typename T>
-inline constexpr auto scale_convert(T x) {
-    using conversion = scale_divide_t<To, From>;
+template <Scale From, Scale To>
+inline constexpr auto scale_convert(auto x) {
+    using conversion = scale_divide_t<From, To>;
 
     constexpr std::intmax_t num = conversion::num;
     constexpr std::intmax_t den = conversion::den;
@@ -248,7 +249,54 @@ inline constexpr auto scale_convert(T x) {
             return x * static_cast<double>(num) / den * pow10;
         }
     }
+
+    // if constexpr (den == 1) {
+    //   // use of common_scale should ensure this den==1 for all implicit
+    //    //  conversions
+    //     if constexpr (num == 1) {
+    //         if constexpr (exp == 0) {
+    //             return x;  // null op
+    //         } else constexpr {
+    //             return 0;
+    //         }
+    //     } else {
+    //     }
+    // } else {
+    //     if constexpr (num == 1) {
+    //         if constexpr (exp == 0) {
+    //         } else {
+    //         }
+    //     } else {
+    //     }
+    // }
 }
+
+namespace detail {
+
+template <Scale S1, Scale S2>
+struct common_scale_impl {
+    static constexpr std::intmax_t gcd_num = std::gcd(S1::num, S2::num);
+
+    static constexpr std::intmax_t gcd_den = std::gcd(S1::den, S2::den);
+
+    // deliberate no use of make_scale to avoid standard form conversion
+    using type = scale<gcd_num, (S1::den / gcd_den) * S2::den,
+                       S1::exp <= S2::exp ? S1::exp : S2::exp>;
+};
+
+// Short-cut for same scales
+template <Scale S>
+struct common_scale_impl<S, S> : Type<S> {};
+
+}  // namespace detail
+
+// Returns the scale factor that is the greatest common multiple of S1 and S2's
+// scale factors such that each scale is only scaled up in a conversion. This
+// avoids integer division where possible. Return scale is not in standard form
+// and therefore scale should used should not be used to make a quantity without
+// first passing through scale_make
+template <Scale S1, Scale S2>
+using common_scale = detail::common_scale_impl<S1, S2>::type;
 
 // Stringifys a scale<> into a minimal "(a/b x 10^c)" like form.
 template <Scale S>
