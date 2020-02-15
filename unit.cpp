@@ -92,6 +92,9 @@
 
 namespace si {
 
+// TODO : check all pass by value no const
+// TODO : static constexpr in functions
+
 // clang-format off
 template <std::intmax_t... Is> struct              length : su::DimensionBase<  "m", Is...> {};
 template <std::intmax_t... Is> struct                time : su::DimensionBase<  "s", Is...> {};
@@ -114,29 +117,57 @@ struct  candelas : su::unit< candelas, su::scale<>, luminous_intensity<>> {};
 
 struct     hertz : su::named_unit<hertz, "Hz", su::scale<>, time<-1>> {};
 
-struct kilometres : su::named_unit<kilometres, "km",  su::scale<1000>,  length<>> {};
+struct kilometres : su::named_unit<kilometres, "km",  su::scale<1,1,3>,  length<>> {};
 
-struct  meters_per_second : su::unit<meters_per_second, su::scale<>, length<>, time<-1>  > {};
+struct meters_per_second : su::unit<meters_per_second, su::scale<>, length<>, time<-1>  > {};
 
 // clang format on
 }
 
+#include <numeric>
 
 using su::quantity;
 
+// quantity operators
 
 int main() {
     // su::conor<int> t{1.};
 
     quantity<si::metres, int> dist_to_pub{1};
-    quantity<si::seconds> bear_oclock{12.};
+    quantity<si::seconds, int> bear_oclock{12};
 
-   quantity<si::kilometres> dist{2.};
+   quantity<si::kilometres, int> dist{2};
 
-   auto k = (dist + dist_to_pub) * bear_oclock * quantity<si::kelvin>{8.8};
+   auto k = (dist + dist_to_pub) * bear_oclock * quantity<si::kelvin, int>{8};
 
    auto b = 1 /  bear_oclock;
 
+   //int i = dist_to_pub * bear_oclock;
+
+    //dist += dist_to_pub;
+
+    std::cout << dist_to_pub << std::endl;
+
+
+   //int{23} < uint{8};
+
+   int num1 = 13;
+   int den1 = 4;
+   int Exp1 = 0;
+
+   int num2 = 3;
+   int den2 = 2;
+   int Exp2 = 1;
+
+  std::intmax_t gcd_num = std::gcd(num1, num2);
+  std::intmax_t gcd_den = std::gcd(den1, den2);
+
+
+  std::cout << gcd_num << '/' << (den1 / gcd_den) * den2 << '^' << std::min(Exp1, Exp2) << std::endl; 
+
+   //k + b;
+
+   //std::string_view lk = std::common_type_t<float, long>{};
 
    //k + b;
 
@@ -146,9 +177,9 @@ int main() {
 
     // auto k = t;  // sum(t, t);
 
-  
+    //int i = decltype(k)::unit{};
 
-     std::cout << k << ' ' << k.base_symbol() << std::endl;
+     std::cout << k << ' ' << (k).base_symbol() << std::endl;
 
     return 0;
 }

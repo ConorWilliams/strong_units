@@ -42,13 +42,13 @@ struct scale_tag {};  // marks class as being of scale type
 
 }  // namespace detail
 
-template <std::intmax_t I, std::intmax_t J, std::intmax_t K>
+template <std::intmax_t I = 1, std::intmax_t J = 1, std::intmax_t K = 0>
 struct ScaleBase : private detail::scale_tag {
     using ratio = std::ratio<I, J>;
 
-    static constexpr std::intmax_t exp = K;
     static constexpr std::intmax_t num = ratio::num;
     static constexpr std::intmax_t den = ratio::den;
+    static constexpr std::intmax_t exp = K;
 
     static_assert(num > 0, "Cannot have zero or negative scaled dimension");
 };
@@ -64,13 +64,13 @@ struct scale {
 };
 
 template <>
-struct scale<> : ScaleBase<1, 1, 0> {};
+struct scale<> : ScaleBase<> {};
 
 template <std::intmax_t I>
-struct scale<I> : ScaleBase<I, 1, 0> {};
+struct scale<I> : ScaleBase<I> {};
 
 template <std::intmax_t I, std::intmax_t J>
-struct scale<I, J> : ScaleBase<I, J, 0> {};
+struct scale<I, J> : ScaleBase<I, J> {};
 
 template <std::intmax_t I, std::intmax_t J, std::intmax_t K>
 struct scale<I, J, K> : ScaleBase<I, J, K> {};
@@ -216,7 +216,7 @@ constexpr auto pow10() {
 
 // Could be generalised to arbitrary scale<...> !
 template <Scale From, Scale To, typename T>
-inline constexpr auto scale_convert(T const x) {
+inline constexpr auto scale_convert(T x) {
     using conversion = scale_divide_t<To, From>;
 
     constexpr std::intmax_t num = conversion::num;
@@ -272,14 +272,14 @@ inline constexpr auto anotate() {
     } else {
         if constexpr (den == 1) {
             if constexpr (num == 1) {
-                return "(10^"_fs + ito_fs<exp> + ")"_fs;
+                return "(10"_fs + super<ito_fs<exp>> + ")"_fs;
             } else {
-                return "("_fs + ito_fs<num> + " x 10^"_fs + ito_fs<exp> +
-                       ")"_fs;
+                return "("_fs + ito_fs<num> + "\u00D710"_fs +
+                       super<ito_fs<exp>> + ")"_fs;
             }
         } else {
-            return "("_fs + ito_fs<num> + "/"_fs + ito_fs<den> + " x 10^"_fs +
-                   ito_fs<exp> + ")"_fs;
+            return "("_fs + ito_fs<num> + "/"_fs + ito_fs<den> + "\u00D710"_fs +
+                   super<ito_fs<exp>> + ")"_fs;
         }
     }
 }

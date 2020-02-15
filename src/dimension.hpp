@@ -193,10 +193,11 @@ inline constexpr auto anotate() {
         return D::symbol;
 
     } else if constexpr (num != 1 && den == 1) {
-        return D::symbol + "^"_fs + ito_fs<num>;
+        return D::symbol + super<ito_fs<num>>;
 
     } else if constexpr (den != 1) {
-        return D::symbol + "^"_fs + ito_fs<num> + "/"_fs + ito_fs<den>;
+        return D::symbol + "^{"_fs + ito_fs<num> + "/"_fs + ito_fs<den> +
+               "}"_fs;
     }
 }
 

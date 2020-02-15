@@ -22,16 +22,16 @@
 
 #pragma once
 
-#if __cplusplus <= 201703L
-#error Requires GCC and -std=c++2a
-#include <stops_compilation>
-#endif
-
 #include <array>
 #include <cstddef>  // std::size_t
 #include <cstdint>  // std::intmax_t
 #include <ostream>
 #include <string_view>
+#include <utility>  // index_seq
+
+#if __GNUC__ >= 10
+#include <compare>
+#endif
 
 // Provides utilities for working with compile time strings and passing string
 // literals as template parameters. See fixed_string.test.cpp for examples.
@@ -54,7 +54,13 @@ struct fixed_string : std::array<char, N> {
     fixed_string& operator=(fixed_string&&) = default;
     fixed_string& operator=(fixed_string const&) = default;
 
-    // auto operator<=>(const string &) const = default; // gcc-10
+#if __GNUC__ >= 10
+
+    auto operator<=>(const string&) const = default;
+
+#endif
+
+    constexpr fixed_string(char c) : std::array<char, N>{c} {}
 
     constexpr fixed_string(char const* str) {
         for (std::size_t i = 0; i < N; ++i) operator[](i) = str[i];
@@ -92,6 +98,8 @@ template <std::size_t N>
 fixed_string(char const (&)[N])->fixed_string<N - 1>;
 
 fixed_string()->fixed_string<0>;
+
+fixed_string(char)->fixed_string<1>;
 
 template <std::size_t... Is>
 fixed_string(fixed_string<Is>...)->fixed_string<(... + Is)>;
@@ -146,8 +154,7 @@ inline constexpr fixed_string digits = {
     "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"};
 
 template <std::intmax_t integer, int base>
-        requires base > 1 &&
-    base < digits.size() + 1 constexpr auto ito_fs() {
+    requires(base > 1) && (base < digits.size() + 1) constexpr auto ito_fs() {
     //
     fixed_string<detail::num_digits<base>(integer)> result;
 
@@ -172,5 +179,48 @@ template <std::intmax_t integer, int base>
 // Convert an integer to a fixed_string  at compile time (in arbitrary base).
 template <std::intmax_t integer, int base = 10>
 inline constexpr fixed_string ito_fs = detail::ito_fs<integer, base>();
+
+namespace detail {
+
+template <auto, typename>
+struct expand;
+
+template <auto value>
+inline constexpr fixed_string super_impl =
+    expand<value, std::make_index_sequence<value.size()>>::value;
+
+template <>
+inline constexpr fixed_string super_impl<'0'> = "\u2070";
+template <>
+inline constexpr fixed_string super_impl<'1'> = "\u00b9";
+template <>
+inline constexpr fixed_string super_impl<'2'> = "\u00b2";
+template <>
+inline constexpr fixed_string super_impl<'3'> = "\u00b3";
+template <>
+inline constexpr fixed_string super_impl<'4'> = "\u2074";
+template <>
+inline constexpr fixed_string super_impl<'5'> = "\u2075";
+template <>
+inline constexpr fixed_string super_impl<'6'> = "\u2076";
+template <>
+inline constexpr fixed_string super_impl<'7'> = "\u2077";
+template <>
+inline constexpr fixed_string super_impl<'8'> = "\u2078";
+template <>
+inline constexpr fixed_string super_impl<'9'> = "\u2079";
+template <>
+inline constexpr fixed_string super_impl<'-'> = "\u207b";
+
+template <auto fs, std::size_t... Is>
+struct expand<fs, std::index_sequence<Is...>> {
+    static constexpr fixed_string value = {super_impl<fs[Is]>...};
+};
+
+}  // namespace detail
+
+// convert a fixed string of numbers 0-9 & '-' into a superscript fixed_string
+template <auto value>
+inline constexpr fixed_string super = detail::super_impl<value>;
 
 }  // namespace fs

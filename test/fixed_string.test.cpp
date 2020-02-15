@@ -2,7 +2,7 @@
 #define DOCTEST_CONFIG_SUPER_FAST_ASSERTS
 #include "doctest.h"
 
-#include "fixed_string.hpp"
+#include "../src/fixed_string.hpp"
 
 using namespace fs;
 
@@ -48,6 +48,10 @@ TEST_CASE("fixed_string class") {
     change[2] = 'c';
 
     CHECK(change == fixed_string{"abc"});
+
+    constexpr fixed_string from_char = 'l';
+
+    CHECK(from_char == "l"_fs);
 }
 
 template <fixed_string str>
@@ -92,4 +96,9 @@ TEST_CASE("fixed_string ito_fs") {
     CHECK(ito_fs<0> == zero);
     CHECK(ito_fs<12345> == plus);
     CHECK(ito_fs<-12345> == minus);
+}
+
+TEST_CASE("fixed_string super") {
+    constexpr auto test = super<"-1234567890"_fs>;
+    std::cout << test << std::endl;
 }

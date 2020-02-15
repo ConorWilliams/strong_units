@@ -19,8 +19,26 @@
 // LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
-
+//
+//
 // This file is taken from: https://github.com/mpusz/units
+//
+// Full credit to Mateusz Pusz for this fantastic idiom!
+//
+// Implements the (very clever) downcast template-idiom enabling (where =>
+// denotes inheritance):
+//
+// struct parent => unit<i, j, k> => downcast_base<unit<i, j, k>>
+//
+// downcast(unit<i, j, k>) -> parent
+//
+// This is achieved by parent inheriting unit<...> through downcast_child which
+// specialises a friend function defined in downcast base. downcast_child has
+// full knowledge of parent through the CRTP idiom and can specialise the friend
+// function in downcast base to return it. Full inheritance:
+//
+// parent => make_unit_helper<parent ...> => downcast_child<parent, ...> =>
+// unit<...> => downcast_base<unit<...>>
 
 #pragma once
 
@@ -33,13 +51,20 @@ namespace su {
 
 template <typename BaseType>
 struct downcast_base {
+    using downcast_base_type = BaseType;
     friend auto downcast_guide(downcast_base);
 };
 
 #pragma GCC diagnostic pop
 
-template <typename Target, typename Unit>
-struct downcast_child : Unit {
+template <typename T>
+concept Downcastable = requires {
+    typename T::downcast_base_type;
+}
+&&std::is_base_of_v<downcast_base<typename T::downcast_base_type>, T>;
+
+template <typename Target, Downcastable T>
+struct downcast_child : T {
     friend auto downcast_guide(typename downcast_child::downcast_base) {
         return Target();
     }
@@ -63,7 +88,7 @@ constexpr auto downcast_impl() {
 
 }  // namespace detail
 
-template <typename T>
+template <Downcastable T>
 using downcast = decltype(detail::downcast_impl<T>());
 
 }  // namespace su

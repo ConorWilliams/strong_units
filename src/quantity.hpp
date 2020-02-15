@@ -23,6 +23,11 @@
 #pragma once
 
 #include <ostream>
+#include <type_traits>
+
+#if __GNUC__ >= 10
+#include <compare>
+#endif
 
 #include "unit.hpp"
 
@@ -38,53 +43,121 @@ struct quantity_tag {};
 template <typename T>
 concept Quantity = std::is_base_of_v<detail::quantity_tag, T>;
 
+template <Unit U, Arithmetic Rep = double>
+class quantity;
+
 // The libraries central type.
-template <Unit U, Arithmetic T = double>
+template <Unit U, Arithmetic Rep>
 class quantity : private detail::quantity_tag {
    public:
-    using value_type = T;
+    using value_type = Rep;
     using unit = U;
 
     quantity() = default;
-    quantity(quantity const &) = default;
-    quantity(quantity &&) = default;
+    quantity(quantity const&) = default;
+    quantity(quantity&&) = default;
 
-    quantity &operator=(quantity const &) = default;
-    quantity &operator=(quantity &&) = default;
+    quantity& operator=(quantity const&) = default;
+    quantity& operator=(quantity&&) = default;
 
     constexpr explicit quantity(Arithmetic value) : m_value{value} {};
 
-    template <Quantity U2>
-    requires dimension_equal_v<U, U2> constexpr quantity(U2 const &other)
+    // Conversions occur hear
+    template <Unit U2, Arithmetic Rep2>
+    requires dimension_equal_v<U, U2> explicit constexpr quantity(
+        quantity<U2, Rep2> other)
         : m_value{raw_convert<U2, U>(other.get())} {}
 
-    template <Quantity U2>
-    requires dimension_equal_v<U, U2> constexpr quantity &operator=(
-        U2 const &other) {
-        m_value = raw_convert<U2, U>(other.get());
+    template <Unit U2, Arithmetic Rep2>
+    requires dimension_equal_v<U, U2> constexpr quantity& operator=(
+        quantity<U2, Rep2> other) {
+        m_value = quantity(other).get();
         return *this;
     }
 
-    [[nodiscard]] inline static constexpr std::string_view symbol() noexcept {
+    [[nodiscard]] static constexpr std::string_view symbol() noexcept {
         return unit::m_symbol.view();
     }
 
-    [[nodiscard]] inline static constexpr std::string_view
-    base_symbol() noexcept {
+    [[nodiscard]] static constexpr std::string_view base_symbol() noexcept {
         return unit::m_base_symbol.view();
     }
 
-    [[nodiscard]] inline constexpr value_type get() const noexcept {
-        return m_value;
+    [[nodiscard]] constexpr Rep get() const noexcept { return m_value; }
+
+    inline constexpr quantity operator-() const { return quantity(-get()); }
+
+    constexpr quantity& operator++() {
+        ++m_value;
+        return *this;
     }
 
+    constexpr quantity operator++(int) { return quantity(m_value++); }
+
+    constexpr quantity& operator--() {
+        --m_value;
+        return *this;
+    }
+
+    constexpr quantity operator--(int) { return quantity(m_value--); }
+
+    template <Unit U2, Arithmetic Rep2>
+    requires dimension_equal_v<U, U2> constexpr quantity& operator+=(
+        quantity<U2, Rep2> other) {
+        m_value += quantity(other).get();
+        return *this;
+    }
+
+    template <Unit U2, Arithmetic Rep2>
+    requires dimension_equal_v<U, U2> constexpr quantity& operator-=(
+        quantity<U2, Rep2> other) {
+        m_value -= quantity(other).get();
+        return *this;
+    }
+
+    constexpr quantity& operator*=(Arithmetic rhs) {
+        m_value *= rhs;
+        return *this;
+    }
+
+    constexpr quantity& operator/=(Arithmetic rhs) {
+        m_value /= rhs;
+        return *this;
+    }
+
+    constexpr quantity& operator%=(Arithmetic rhs) requires requires(Rep v) {
+        v %= rhs;
+    }
+    {
+        m_value %= rhs;
+        return *this;
+    }
+
+#if __GNUC__ >= 10
+
+    template <Unit U2, Arithmetic Rep2>
+    requires dimension_equal_v<U, U2> friend constexpr auto operator<=>(
+        quantity lhs, quantity<U2, Rep2> rhs) {
+        return get() <=> raw_convert<U2, U>(other.get());
+    }
+
+#endif
+
+    // template <Unit U2, Arithmetic Rep2>
+    // requires dimension_equal_v<U, U2> friend constexpr auto operator==(
+    //     quantity lhs, quantity<U2, Rep2> rhs) r {
+    //     return cq(lhs).count() == cq(rhs).count();
+    // }
+
    private:
-    value_type m_value;
+    Rep m_value;
+
+    // hidden operators
 };
 
 /////////////////////////////////  operators //////////////////////////////////
 
-std::ostream &operator<<(std::ostream &os, const Quantity &obj) {
+std::ostream& operator<<(std::ostream& os, const Quantity& obj) {
     return os << obj.get();
 }
 
@@ -119,17 +192,17 @@ constexpr inline auto operator*(quantity<Ul, Tl> const lhs,
         merge_sum_sorted_t<typename Ul::dimensions, typename Ur::dimensions>>;
 
     using quanity_t =
-        quantity<downcast<unit_t>, decltype(lhs.get() * rhs.get())>;
+        quantity<downcast_unit<unit_t>, decltype(lhs.get() * rhs.get())>;
 
     return quanity_t{lhs.get() * rhs.get()};
 }
 
 constexpr inline auto operator*(Quantity lhs, Arithmetic rhs) {
-    return lhs * quantity<anon<scale<>>, decltype(rhs)>{rhs};
+    return lhs * quantity<nameless<scale<>>, decltype(rhs)>{rhs};
 }
 
 constexpr inline auto operator*(Arithmetic lhs, Quantity rhs) {
-    return quantity<anon<scale<>>, decltype(lhs)>{lhs} * rhs;
+    return quantity<nameless<scale<>>, decltype(lhs)>{lhs} * rhs;
 }
 
 template <Unit Ul, Arithmetic Tl, Unit Ur, Arithmetic Tr>
@@ -145,17 +218,17 @@ constexpr inline auto operator/(quantity<Ul, Tl> const lhs,
         dimensions>;
 
     using quanity_t =
-        quantity<downcast<unit_t>, decltype(lhs.get() / rhs.get())>;
+        quantity<downcast_unit<unit_t>, decltype(lhs.get() / rhs.get())>;
 
     return quanity_t{lhs.get() / rhs.get()};
 }
 
 constexpr inline auto operator/(Quantity lhs, Arithmetic rhs) {
-    return lhs / quantity<anon<scale<>>, decltype(rhs)>{rhs};
+    return lhs / quantity<nameless<scale<>>, decltype(rhs)>{rhs};
 }
 
 constexpr inline auto operator/(Arithmetic lhs, Quantity rhs) {
-    return quantity<anon<scale<>>, decltype(lhs)>{lhs} / rhs;
+    return quantity<nameless<scale<>>, decltype(lhs)>{lhs} / rhs;
 }
 
 }  // namespace su
