@@ -29,6 +29,8 @@
 
 #include "fixed_string.hpp"
 
+static inline constexpr int INTMAX_LOG_10 = 16;
+
 namespace su {
 
 // Convenience struct for inheriting: using type = ...
@@ -190,39 +192,40 @@ using scale_divide_t = detail::scale_divide<A, B>::type;
 namespace detail {
 
 // Constexpr pow10 function
-template <std::intmax_t exponent>
-constexpr std::conditional_t<(exponent < 308), double, long double>
-pow10_impl() {
+template <std::intmax_t exponent, typename T>
+requires(exponent > 0) constexpr T pow10_impl() {
     if constexpr (exponent == 0) {
-        return 1.;
+        return static_cast<T>(1);
     } else if constexpr (exponent == 1) {
-        return 10.;
+        return static_cast<T>(10);
     } else if constexpr (exponent % 2 == 0) {
-        return pow10_impl<exponent / 2>() * pow10_impl<exponent / 2>();
+        return pow10_impl<exponent / 2, T>() * pow10_impl<exponent / 2, T>();
     } else {
-        return pow10_impl<exponent / 2>() * pow10_impl<exponent / 2>() * 10;
+        return pow10_impl<exponent / 2, T>() * pow10_impl<exponent / 2, T>() *
+               static_cast<T>(10);
     }
 }
 
-template <std::intmax_t exponent>
+// returns T or double if negative exponent
+template <std::intmax_t exponent, typename T>
 constexpr auto pow10() {
     if constexpr (exponent > 0) {
-        return pow10_impl<exponent>();
+        return pow10_impl<exponent, T>();
     } else {
-        return 1. / pow10_impl<-exponent>();
+        return 1. / pow10_impl<-exponent, double>();
     }
 }
 
 }  // namespace detail
 
-// Could be generalised to arbitrary scale<...> !
-template <Scale From, Scale To>
-inline constexpr auto scale_convert(auto x) {
-    using conversion = scale_divide_t<From, To>;
+template <Scale From, Scale To, typename T>
+inline constexpr auto scale_convert(T x) {
+    //
+    using ratio = std::ratio_divide<typename From::ratio, typename To::ratio>;
 
-    constexpr std::intmax_t num = conversion::num;
-    constexpr std::intmax_t den = conversion::den;
-    constexpr std::intmax_t exp = conversion::exp;
+    constexpr T num = ratio::num;
+    constexpr T den = ratio::den;
+    constexpr T exp = From::exp - To::exp;
 
     // Avoid floating point multiplication without -ffast-math
     if constexpr (exp == 0) {
@@ -231,72 +234,25 @@ inline constexpr auto scale_convert(auto x) {
         } else if constexpr (num != 1 && den == 1) {
             return x * num;
         } else if constexpr (num == 1 && den != 1) {
-            return x / static_cast<double>(den);
-        } else {
-            return x * static_cast<double>(num) / den;
+            return x / den;
+        } else if constexpr (num != 1 && den != 1) {
+            return x * num / den;
         }
     } else {
-        // double or long double
-        constexpr auto pow10 = detail::pow10<exp>();
+        // auto type is T or double
+        constexpr auto pow10 = detail::pow10<exp, T>();
 
         if constexpr (num == 1 && den == 1) {
             return x * pow10;
         } else if constexpr (num != 1 && den == 1) {
-            return (x * num) * pow10;
+            return x * num * pow10;
         } else if constexpr (num == 1 && den != 1) {
-            return x / static_cast<double>(den) * pow10;
-        } else {
-            return x * static_cast<double>(num) / den * pow10;
+            return x / den * pow10;
+        } else if constexpr (num != 1 && den != 1) {
+            return x * num / den * pow10;
         }
     }
-
-    // if constexpr (den == 1) {
-    //   // use of common_scale should ensure this den==1 for all implicit
-    //    //  conversions
-    //     if constexpr (num == 1) {
-    //         if constexpr (exp == 0) {
-    //             return x;  // null op
-    //         } else constexpr {
-    //             return 0;
-    //         }
-    //     } else {
-    //     }
-    // } else {
-    //     if constexpr (num == 1) {
-    //         if constexpr (exp == 0) {
-    //         } else {
-    //         }
-    //     } else {
-    //     }
-    // }
 }
-
-namespace detail {
-
-template <Scale S1, Scale S2>
-struct common_scale_impl {
-    static constexpr std::intmax_t gcd_num = std::gcd(S1::num, S2::num);
-
-    static constexpr std::intmax_t gcd_den = std::gcd(S1::den, S2::den);
-
-    // deliberate no use of make_scale to avoid standard form conversion
-    using type = scale<gcd_num, (S1::den / gcd_den) * S2::den,
-                       S1::exp <= S2::exp ? S1::exp : S2::exp>;
-};
-
-// Short-cut for same scales
-template <Scale S>
-struct common_scale_impl<S, S> : Type<S> {};
-
-}  // namespace detail
-
-// Returns the scale factor that is the greatest common multiple of S1 and S2's
-// scale factors such that each scale is only scaled up in a conversion. This
-// avoids integer division where possible. Return scale is not in standard form
-// and therefore scale should used should not be used to make a quantity without
-// first passing through scale_make
-template <Scale S1, Scale S2>
-using common_scale = detail::common_scale_impl<S1, S2>::type;
 
 // Stringifys a scale<> into a minimal "(a/b x 10^c)" like form.
 template <Scale S>

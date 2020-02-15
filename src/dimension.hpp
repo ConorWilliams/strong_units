@@ -99,8 +99,8 @@ struct dimension_equal<A, B> {
 };
 
 template <Dimension... Dl, Dimension... Dr>
-    requires sizeof...(Dl) ==
-    sizeof...(Dr) struct dimension_equal<list<Dl...>, list<Dr...>> {
+requires(sizeof...(Dl) ==
+         sizeof...(Dr)) struct dimension_equal<list<Dl...>, list<Dr...>> {
     static constexpr bool value =
         std::conjunction_v<dimension_equal<Dl, Dr>...>;
 };

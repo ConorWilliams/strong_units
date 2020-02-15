@@ -56,7 +56,7 @@ struct fixed_string : std::array<char, N> {
 
 #if __GNUC__ >= 10
 
-    auto operator<=>(const string&) const = default;
+    auto operator<=>(const fixed_string&) const = default;
 
 #endif
 
@@ -145,7 +145,7 @@ constexpr int compare(fixed_string<I> lhs, fixed_string<J> rhs) {
 namespace detail {
 
 template <int base>
-    requires base > 1 constexpr std::size_t num_digits(std::intmax_t x) {
+requires(base > 1) constexpr std::size_t num_digits(std::intmax_t x) {
     return x < 0 ? 1 + num_digits<base>(-x)
                  : x < base ? 1 : 1 + num_digits<base>(x / base);
 }

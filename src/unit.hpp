@@ -103,8 +103,8 @@ struct downcast_unit_impl<U, nameless<scale<>, Dims...>>
 
 // General case for no downcast
 template <Unit U>
-requires !std::is_same_v<typename U::scale_factor,
-                         scale<>> struct downcast_unit_impl<U, U> : Type<U> {};
+requires(!std::is_same_v<typename U::scale_factor,
+                         scale<>>) struct downcast_unit_impl<U, U> : Type<U> {};
 
 }  // namespace detail
 

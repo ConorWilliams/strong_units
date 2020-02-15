@@ -2,94 +2,6 @@
 
 #include "src/quantity.hpp"
 
-// namespace su::nope {
-
-// #pragma GCC diagnostic push
-// #pragma GCC diagnostic ignored "-Wnon-template-friend"
-
-// template <typename BaseType>
-// struct downcast_base {
-//     using base_type = BaseType;
-
-//     friend auto downcast_guide(downcast_base);
-// };
-
-// #pragma GCC diagnostic pop
-
-// template <Scale S, typename... Ts>
-// struct UNIT : downcast_base<UNIT<S, Ts...>> {};
-
-// template <typename T>
-// concept Downcastable = requires {
-//     typename T::base_type;
-// }
-// &&std::is_base_of_v<downcast_base<typename T::base_type>, T>;
-
-// template <typename Target, Downcastable T>
-// struct downcast_helper : T {
-//     friend auto downcast_guide(typename downcast_helper::downcast_base) {
-//         return Target();
-//     }
-// };
-
-// template <typename Child, typename... Es>
-// struct derived_dimension : downcast_helper<Child, UNIT<Es...>> {};
-
-// template <typename T>
-// concept has_downcast = requires {
-//     downcast_guide(std::declval<downcast_base<T>>());
-// };
-
-// template <typename T>
-// constexpr auto downcast_target_impl() {
-//     if constexpr (has_downcast<T>) {
-//         return decltype(downcast_guide(std::declval<downcast_base<T>>()))();
-//     } else {
-//         return T{};
-//     }
-// }
-
-// template <Downcastable T>
-// using downcast_target = decltype(downcast_target_impl<T>());
-
-// ////////////////////////////////////////////////////////
-
-// template <template <typename> typename CRTP, fs::fixed_string Sym, Arithmetic
-// T,
-//           Scale S, Dimension... Dims>
-
-// struct named_unit : unit_make<T, S, Dims...> {
-//     static constexpr auto self = named_unit<CRTP, Sym, T, S, Dims...>{};
-
-//     using unit_make<T, S, Dims...>::unit;
-//     using unit_make<T, S, Dims...>::operator=;
-
-//     [[nodiscard]] inline static constexpr std::string_view symbol() noexcept
-//     {
-//         return m_symbol.view();
-//     }
-
-//     static constexpr fs::fixed_string m_symbol = Sym;
-// };
-
-// struct timer : derived_dimension<timer, scale<>, si::time<>> {};
-
-// struct velocity : derived_dimension<velocity, scale<>, length<>> {};
-
-// // struct minute: named_unit<minute, "min", su::scale<60>, si::second<>>;
-
-// // quant<minute, double> elapsed_time;
-
-// // quant<hour> final = elapsed_time
-
-// template <typename T>
-// struct conor : named_unit<conor, "conors", double, scale<>, length<>> {
-//     using named_unit<conor, "conors", double, scale<>, length<>>::named_unit;
-//     using named_unit<conor, "conors", double, scale<>, length<>>::operator=;
-// };
-
-// }  // namespace su::nope
-
 namespace si {
 
 // TODO : check all pass by value no const
@@ -129,39 +41,39 @@ struct meters_per_second : su::unit<meters_per_second, su::scale<>, length<>, ti
 
 using su::quantity;
 
-struct a : su::named_unit<a, "a", su::scale<30, 7, -1>, si::length<>> {};
-struct b : su::named_unit<b, "b", su::scale<5, 2>, si::length<>> {};
+struct a : su::named_unit<a, "a", su::scale<2, 1>, si::length<>> {};
+struct b : su::named_unit<b, "b", su::scale<1, 7>, si::length<>> {};
 
 inline constexpr quantity<si::seconds, double> bear_oclock{12.};
 
 // quantity operators
 
 int main() {
-    quantity<a, double> m{1.};
+    quantity<si::hertz, int> m{1};
 
-    quantity<b, double> km{1.};
+    quantity<si::kelvin, int> km{1};
 
-    quantity<si::metres> sum = m + km;
+    km + (km / m);
 
-    // int i = km + m;
+    quantity<si::hertz> t = km * m / m / m / bear_oclock;
 
-    std::cout << m + km << ' ' << (m + km).base_symbol() << std::endl;
-    std::cout << km << ' ' << (km).symbol() << std::endl;
-    std::cout << sum << ' ' << (sum).symbol() << std::endl;
+    std::cout << km * m / m / m / bear_oclock << std::endl;
+    std::cout << t << std::endl;
+    // std::cout << sum << ' ' << (sum).symbol() << std::endl;
 
     //
-    int num1 = 51;
-    int den1 = 10;
+    int num1 = 3;
+    int den1 = 1;
     int Exp1 = 1;
 
-    int num2 = 5;
-    int den2 = 1;
+    int num2 = 20;
+    int den2 = 7;
     int Exp2 = 0;
 
     std::intmax_t gcd_num = std::gcd(num1, num2);
     std::intmax_t gcd_den = std::gcd(den1, den2);
 
-    std::cout << gcd_num << '/' << (den1 / gcd_den) * den2 << '^'
+    std::cout << gcd_num << '/' << (den1 / gcd_den) * den2 << "x10^"
               << std::min(Exp1, Exp2) << std::endl;
 
     return 0;
