@@ -57,9 +57,13 @@ struct dimension_tag {};  // Marks class as being a dimension type.
 
 }  // namespace detail
 
-// Defaults required for variadic instantiation
+// *****************************************************************************
+// *               User access point for making new dimensions                 *
+// *****************************************************************************
+
+// Dimension base class. Defaults required for variadic instantiation
 template <fs::fixed_string Str, std::intmax_t I = 1, std::intmax_t J = 1>
-struct DimensionBase : private detail::dimension_tag {
+struct dimension : private detail::dimension_tag {
     using exp = std::ratio<I, J>;
 
     static constexpr std::intmax_t num = exp::num;
@@ -67,6 +71,8 @@ struct DimensionBase : private detail::dimension_tag {
 
     static constexpr fs::fixed_string symbol = Str;
 };
+
+////////////////////////////////////////////////////////////////////////////////
 
 template <typename T>
 concept Dimension = std::is_base_of_v<detail::dimension_tag, T>;
@@ -159,7 +165,6 @@ template <typename, typename>
 struct dimension_multiply;
 
 }
-
 // Returns new dimension with same type but and new exponent equal to the
 // product of std::ratio O and the argument dimensions' exponent.
 template <typename D, typename Ratio>
@@ -177,8 +182,6 @@ struct dimension_multiply<Dim<Is...>, Ratio> {
 template <typename Ratio, Dimension... Dims>
 struct dimension_multiply<list<Dims...>, Ratio>
     : Type<list<dimension_multiply_t<Dims, Ratio>...>> {};
-
-}  // namespace detail
 
 // Extracts symbol from dimension and returns symbol as a static string
 // decorated with exponent in minimal "symbol^x/y" like form.
@@ -200,8 +203,6 @@ inline constexpr auto anotate() {
                "}"_fs;
     }
 }
-
-namespace detail {
 
 template <typename>
 struct ordered_impl;

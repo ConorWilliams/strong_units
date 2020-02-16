@@ -58,7 +58,6 @@ struct common_scale {
     using type = scale<gcd_num, (S1::den / gcd_den) * S2::den,
                        S1::exp <= S2::exp ? S1::exp : S2::exp>;
 };
-
 // Short-cut for same scales
 template <Scale S>
 struct common_scale<S, S> : Type<S> {};
@@ -83,13 +82,13 @@ requires dimension_equal_v<U1, U2> struct common_help {
     // case of narrowing conversions in constructors. Bypass unit_make_t to
     // avoid scale conversion to standard form.
     //
-    using unit_t = detail::unit_make_impl<true, scale, dimension>::type;
-    using irregular_quantity = quantity<unit_t, std::common_type_t<R1, R2>>;
+    using irreg_unit = detail::unit_make_impl<true, scale, dimension>::type;
+    using irreg_quantity = quantity<irreg_unit, std::common_type_t<R1, R2>>;
 
    public:
     template <typename Quant>
     static constexpr auto conv(Quant x) {
-        return irregular_quantity(x).get();
+        return irreg_quantity(x).get();
     }
 
     using unit = downcast_unit<unit_make_t<scale, dimension>>;
@@ -100,6 +99,9 @@ requires dimension_equal_v<U1, U2> struct common_help {
 // The libraries central type.
 template <Unit U, Arithmetic Rep>
 class quantity {
+   private:
+    Rep m_value;
+
    public:
     using value_type = Rep;
     using unit = U;
@@ -111,11 +113,11 @@ class quantity {
     quantity& operator=(quantity const&) = default;
     quantity& operator=(quantity&&) = default;
 
-    constexpr quantity(Arithmetic value) : m_value{value} {};
+    constexpr explicit quantity(Arithmetic value) : m_value{value} {};
 
     // All conversions occur hear. Causes warnings if raw_convert type != Rep
     template <Unit U2, Arithmetic Rep2>
-    requires dimension_equal_v<U, U2> constexpr quantity(
+    requires dimension_equal_v<U, U2> explicit constexpr quantity(
         quantity<U2, Rep2> other)
         : m_value{raw_convert<U2, U>(other.get())} {}
 
@@ -139,6 +141,8 @@ class quantity {
     [[nodiscard]] inline constexpr quantity operator-() const {
         return quantity(-get());
     }
+
+    [[nodiscard]] constexpr quantity operator+() const { return *this; }
 
     constexpr quantity& operator++() {
         ++m_value;
@@ -172,6 +176,17 @@ class quantity {
         return *this;
     }
 
+    // modulo follow addition / subtraction rules e.g 4cm % 3cm = 1cm This is
+    // due to the requirement of the existence of a scalar k such that:
+    // k * 3cm + 1cm = 4cm
+    template <Unit U2, Arithmetic Rep2>
+    requires dimension_equal_v<U, U2>
+        // && requires(Rep v1, Rep v2) {v1 %= v2;} // gcc bug?
+        constexpr quantity& operator%=(quantity<U2, Rep2> other) {
+        m_value %= quantity(other).get();
+        return *this;
+    }
+
     constexpr quantity& operator*=(Arithmetic rhs) {
         m_value *= rhs;
         return *this;
@@ -182,90 +197,99 @@ class quantity {
         return *this;
     }
 
-#if __GNUC__ >= 10
-
-    template <Unit U2, Arithmetic Rep2>
-    [[nodiscard]] friend constexpr auto operator<=>(
-        quantity lhs,
-        quantity<U2, Rep2> rhs) requires dimension_equal_v<U, U2> {
-        using common = common_help<U, Rep, U2, Rep2>;
-        return common::conv(lhs) <=> common::conv(rhs);
-    }
-
-#endif
-
-    template <Unit U2, Arithmetic Rep2>
-    [[nodiscard]] friend constexpr auto operator==(
-        quantity lhs,
-        quantity<U2, Rep2> rhs) requires dimension_equal_v<U, U2> {
-        using common = common_help<U, Rep, U2, Rep2>;
-        return common::conv(lhs) == common::conv(rhs);
-    }
-
+   private:
     friend std::ostream& operator<<(std::ostream& os, quantity obj) {
         return os << obj.get() << ' ' << U::m_symbol;
     }
-
-   private:
-    Rep m_value;
-
-    // hidden operators
 };
 
-/////////////////////////////////  operators //////////////////////////////////
+#if __GNUC__ >= 10
 
-template <Unit U1, Arithmetic R1, Unit U2, Arithmetic R2>
-[[nodiscard]] constexpr inline auto operator+(
-    quantity<U1, R1> lhs,
-    quantity<U2, R2> rhs) requires dimension_equal_v<U1, U2> {
+template <Unit U1, Arithmetic Rep1, Unit U2, Arithmetic Rep2>
+[[nodiscard]] inline constexpr auto operator<=>(
+    quantity<U1, Rep1> lhs,
+    quantity<U2, Rep2> rhs) requires dimension_equal_v<U1, U2> {
     //
-    using common = common_help<U1, R1, U2, R2>;
+    using common = common_help<U1, Rep1, U2, Rep2>;
+    return common::conv(lhs) <=> common::conv(rhs);
+}
 
-    using rep = decltype(common::conv(lhs) + common::conv(rhs));
+#endif
 
-    using quantity_t = quantity<typename common::unit, rep>;
+template <Unit U1, Arithmetic Rep1, Unit U2, Arithmetic Rep2>
+[[nodiscard]] inline constexpr auto operator==(
+    quantity<U1, Rep1> lhs,
+    quantity<U2, Rep2> rhs) requires dimension_equal_v<U1, U2> {
+    //
+    using common = common_help<U1, Rep1, U2, Rep2>;
+    return common::conv(lhs) == common::conv(rhs);
+}
 
+template <Unit U1, Arithmetic Rep1, Unit U2, Arithmetic Rep2>
+[[nodiscard]] inline constexpr auto operator+(
+    quantity<U1, Rep1> lhs,
+    quantity<U2, Rep2> rhs) requires dimension_equal_v<U1, U2> {
+    //
+    using common = common_help<U1, Rep1, U2, Rep2>;
+    using return_rep = decltype(common::conv(lhs) + common::conv(rhs));
+
+    using quantity_t = quantity<typename common::unit, return_rep>;
     return quantity_t{common::conv(lhs) + common::conv(rhs)};
 }
 
-template <Unit U1, Arithmetic R1, Unit U2, Arithmetic R2>
-[[nodiscard]] constexpr inline auto operator-(
-    quantity<U1, R1> lhs,
-    quantity<U2, R2> rhs) requires dimension_equal_v<U1, U2> {
+template <Unit U1, Arithmetic Rep1, Unit U2, Arithmetic Rep2>
+[[nodiscard]] inline constexpr auto operator-(
+    quantity<U1, Rep1> lhs,
+    quantity<U2, Rep2> rhs) requires dimension_equal_v<U1, U2> {
     //
-    using common = common_help<U1, R1, U2, R2>;
+    using common = common_help<U1, Rep1, U2, Rep2>;
+    using return_rep = decltype(common::conv(lhs) - common::conv(rhs));
 
-    using rep = decltype(common::conv(lhs) - common::conv(rhs));
-
-    using quantity_t = quantity<typename common::unit, rep>;
-
+    using quantity_t = quantity<typename common::unit, return_rep>;
     return quantity_t{common::conv(lhs) - common::conv(rhs)};
 }
 
-template <Unit Ul, Arithmetic Tl, Unit Ur, Arithmetic Tr>
-[[nodiscard]] constexpr inline auto operator*(quantity<Ul, Tl> lhs,
-                                              quantity<Ur, Tr> rhs) {
+// clang-format off
+template <Unit U1, Arithmetic Rep1, Unit U2, Arithmetic Rep2>
+[[nodiscard]] inline constexpr auto operator%(
+    quantity<U1, Rep1> lhs,
+    quantity<U2, Rep2> rhs) 
+
+    requires dimension_equal_v<U1, U2> && 
+    requires (std::common_type_t<Rep1, Rep2> x) {x % x;}
+{
+    using common = common_help<U1, Rep1, U2, Rep2>;
+    using return_rep = decltype(common::conv(lhs) % common::conv(rhs));
+
+    using quantity_t = quantity<typename common::unit, return_rep>;
+    return quantity_t{common::conv(lhs) % common::conv(rhs)};
+}
+// clang-format on
+
+template <Unit U1, Arithmetic Rep1, Unit U2, Arithmetic Rep2>
+[[nodiscard]] inline constexpr auto operator*(quantity<U1, Rep1> lhs,
+                                              quantity<U2, Rep2> rhs) {
     //
     using unit_t = unit_make_t<
-        scale_multiply_t<typename Ul::scale_factor, typename Ur::scale_factor>,
-        merge_sum_sorted_t<typename Ul::dimensions, typename Ur::dimensions>>;
+        scale_multiply_t<typename U1::scale_factor, typename U2::scale_factor>,
+        merge_sum_sorted_t<typename U1::dimensions, typename U2::dimensions>>;
 
-    using quanity_t =
+    using quantity_t =
         quantity<downcast_unit<unit_t>, decltype(lhs.get() * rhs.get())>;
 
-    return quanity_t{lhs.get() * rhs.get()};
+    return quantity_t{lhs.get() * rhs.get()};
 }
 
-template <Unit Ul, Arithmetic Tl, Unit Ur, Arithmetic Tr>
-[[nodiscard]] constexpr inline auto operator/(quantity<Ul, Tl> lhs,
-                                              quantity<Ur, Tr> rhs) {
+template <Unit U1, Arithmetic Rep1, Unit U2, Arithmetic Rep2>
+[[nodiscard]] inline constexpr auto operator/(quantity<U1, Rep1> lhs,
+                                              quantity<U2, Rep2> rhs) {
     //
     using dimensions = merge_sum_sorted_t<
-        typename Ul::dimensions,
-        dimension_multiply_t<typename Ur::dimensions, std::ratio<-1>>>;
+        typename U1::dimensions,
+        dimension_multiply_t<typename U2::dimensions, std::ratio<-1>>>;
 
     using unit_t = unit_make_t<
-        scale_divide_t<typename Ul::scale_factor, typename Ur::scale_factor>,
+        scale_divide_t<typename U1::scale_factor, typename U2::scale_factor>,
         dimensions>;
 
     using quanity_t =
@@ -275,27 +299,29 @@ template <Unit Ul, Arithmetic Tl, Unit Ur, Arithmetic Tr>
 }
 
 template <Unit U, Arithmetic Rep>
-[[nodiscard]] constexpr inline auto operator*(quantity<U, Rep> lhs,
+[[nodiscard]] inline constexpr auto operator*(quantity<U, Rep> lhs,
                                               Arithmetic rhs) {
     return lhs * quantity<scalar_unit, decltype(rhs)>{rhs};
 }
 
 template <Unit U, Arithmetic Rep>
-[[nodiscard]] constexpr inline auto operator*(Arithmetic lhs,
+[[nodiscard]] inline constexpr auto operator*(Arithmetic lhs,
                                               quantity<U, Rep> rhs) {
     return quantity<scalar_unit, decltype(lhs)>{lhs} * rhs;
 }
 
 template <Unit U, Arithmetic Rep>
-[[nodiscard]] constexpr inline auto operator/(quantity<U, Rep> lhs,
+[[nodiscard]] inline constexpr auto operator/(quantity<U, Rep> lhs,
                                               Arithmetic rhs) {
     return lhs / quantity<scalar_unit, decltype(rhs)>{rhs};
 }
 
 template <Unit U, Arithmetic Rep>
-[[nodiscard]] constexpr inline auto operator/(Arithmetic lhs,
+[[nodiscard]] inline constexpr auto operator/(Arithmetic lhs,
                                               quantity<U, Rep> rhs) {
     return quantity<scalar_unit, decltype(lhs)>{lhs} / rhs;
 }
+
+/////////////////////////////////  operators //////////////////////////////////
 
 }  // namespace su

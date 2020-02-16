@@ -191,69 +191,6 @@ using scale_divide_t = detail::scale_divide<A, B>::type;
 
 namespace detail {
 
-// Constexpr pow10 function
-template <std::intmax_t exponent, typename T>
-requires(exponent > 0) constexpr T pow10_impl() {
-    if constexpr (exponent == 0) {
-        return static_cast<T>(1);
-    } else if constexpr (exponent == 1) {
-        return static_cast<T>(10);
-    } else if constexpr (exponent % 2 == 0) {
-        return pow10_impl<exponent / 2, T>() * pow10_impl<exponent / 2, T>();
-    } else {
-        return pow10_impl<exponent / 2, T>() * pow10_impl<exponent / 2, T>() *
-               static_cast<T>(10);
-    }
-}
-
-// returns T or double if negative exponent
-template <std::intmax_t exponent, typename T>
-constexpr auto pow10() {
-    if constexpr (exponent > 0) {
-        return pow10_impl<exponent, T>();
-    } else {
-        return 1. / pow10_impl<-exponent, double>();
-    }
-}
-
-}  // namespace detail
-
-template <Scale From, Scale To, typename T>
-inline constexpr auto scale_convert(T x) {
-    //
-    using ratio = std::ratio_divide<typename From::ratio, typename To::ratio>;
-
-    constexpr T num = ratio::num;
-    constexpr T den = ratio::den;
-    constexpr T exp = From::exp - To::exp;
-
-    // Avoid floating point multiplication without -ffast-math
-    if constexpr (exp == 0) {
-        if constexpr (num == 1 && den == 1) {
-            return x;
-        } else if constexpr (num != 1 && den == 1) {
-            return x * num;
-        } else if constexpr (num == 1 && den != 1) {
-            return x / den;
-        } else if constexpr (num != 1 && den != 1) {
-            return x * num / den;
-        }
-    } else {
-        // auto type is T or double
-        constexpr auto pow10 = detail::pow10<exp, T>();
-
-        if constexpr (num == 1 && den == 1) {
-            return x * pow10;
-        } else if constexpr (num != 1 && den == 1) {
-            return x * num * pow10;
-        } else if constexpr (num == 1 && den != 1) {
-            return x / den * pow10;
-        } else if constexpr (num != 1 && den != 1) {
-            return x * num / den * pow10;
-        }
-    }
-}
-
 // Stringifys a scale<> into a minimal "(a/b x 10^c)" like form.
 template <Scale S>
 inline constexpr auto anotate() {
@@ -284,6 +221,69 @@ inline constexpr auto anotate() {
         } else {
             return "("_fs + ito_fs<num> + "/"_fs + ito_fs<den> + "\u00D710"_fs +
                    super<ito_fs<exp>> + ")"_fs;
+        }
+    }
+}
+
+template <std::intmax_t exponent, typename T>
+requires(exponent > 0) constexpr T pow10() {
+    if constexpr (exponent == 0) {
+        return static_cast<T>(1);
+    } else if constexpr (exponent == 1) {
+        return static_cast<T>(10);
+    } else if constexpr (exponent % 2 == 0) {
+        return pow10<exponent / 2, T>() * pow10<exponent / 2, T>();
+    } else {
+        return pow10<exponent / 2, T>() * pow10<exponent / 2, T>() *
+               static_cast<T>(10);
+    }
+}
+
+}  // namespace detail
+
+template <Scale From, Scale To, typename T>
+inline constexpr T scale_convert(T x) {
+    //
+    using ratio = std::ratio_divide<typename From::ratio, typename To::ratio>;
+
+    constexpr std::intmax_t num = ratio::num;
+    constexpr std::intmax_t den = ratio::den;
+    constexpr std::intmax_t exp = From::exp - To::exp;
+
+    // Avoid floating point multiplication without -ffast-math
+    if constexpr (exp == 0) {
+        if constexpr (num == 1 && den == 1) {
+            return x;
+        } else if constexpr (num != 1 && den == 1) {
+            return x * static_cast<T>(num);
+        } else if constexpr (num == 1 && den != 1) {
+            return x / static_cast<T>(den);
+        } else if constexpr (num != 1 && den != 1) {
+            return x * static_cast<T>(num) / static_cast<T>(den);
+        }
+    } else if constexpr (exp > 0) {
+        constexpr T pow10 = detail::pow10<exp, T>();
+
+        if constexpr (num == 1 && den == 1) {
+            return x * pow10;
+        } else if constexpr (num != 1 && den == 1) {
+            return x * static_cast<T>(num) * pow10;
+        } else if constexpr (num == 1 && den != 1) {
+            return x / static_cast<T>(den) * pow10;
+        } else if constexpr (num != 1 && den != 1) {
+            return x * static_cast<T>(num) / static_cast<T>(den) * pow10;
+        }
+    } else if constexpr (exp < 0) {
+        constexpr T pow10 = detail::pow10<-exp, T>();
+
+        if constexpr (num == 1 && den == 1) {
+            return x / pow10;
+        } else if constexpr (num != 1 && den == 1) {
+            return x * static_cast<T>(num) / pow10;
+        } else if constexpr (num == 1 && den != 1) {
+            return x / static_cast<T>(den) / pow10;
+        } else if constexpr (num != 1 && den != 1) {
+            return x * static_cast<T>(num) / static_cast<T>(den) / pow10;
         }
     }
 }

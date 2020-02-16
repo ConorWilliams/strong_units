@@ -77,7 +77,7 @@ struct nameless : downcast_base<nameless<S, Dims...>>, detail::unit_tag {
 
     // Symbol contains scale info and dimension symbols / exponents.
     static constexpr fs::fixed_string m_base_symbol =
-        detail::join(anotate<S>(), anotate<Dims>()...);
+        detail::join(detail::anotate<S>(), detail::anotate<Dims>()...);
 
     static constexpr fs::fixed_string m_symbol = m_base_symbol;
 };
@@ -86,13 +86,14 @@ template <typename T>
 concept Unit = std::is_base_of_v<detail::unit_tag, T>;
 
 // Units which have scale<1, 1, 0> are coherent and therefore we can exclude
-// that from the template parameter to shorten the quantity definition.
+// the scale from the template parameter list to shorten the quantity
+// definition.
 template <Dimension... Dims>
-struct coherent : nameless<scale<>> {};
+struct coherent : nameless<scale<>, Dims...> {};
 
 namespace detail {
 
-// General case use downcast
+// Case for unique downcast
 template <Unit U, Unit D>
 struct downcast_unit_impl : Type<D> {};
 
@@ -108,7 +109,7 @@ requires(!std::is_same_v<typename U::scale_factor,
 
 }  // namespace detail
 
-// Downcast a unit to either a user defined unit a 'coherent' unit or a
+// Downcast a unit to either an user defined unit an 'coherent' unit or an
 // non-coherent 'nameless' unit
 template <Unit U>
 using downcast_unit = detail::downcast_unit_impl<U, downcast<U>>::type;
@@ -134,8 +135,8 @@ struct unit_make_impl<false, S, list<Dims...>>
 
 }  // namespace detail
 
-// Makes a unit type from a dimension list<...> by simplifying and sorting the
-// it and simplifying the scale.
+// Makes a unit type from a dimension list<...> by simplifying and sorting it
+// and simplifying the scale.
 template <Scale S, List L>
 using unit_make_t =
     detail::unit_make_impl<ordered_v<L>, scale_make<S::num, S::den, S::exp>,

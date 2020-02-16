@@ -118,7 +118,7 @@ inline constexpr auto operator+(fixed_string<I> const& lhs,
 }
 
 template <std::size_t N>
-std::ostream& operator<<(std::ostream& os, const fixed_string<N>& str) {
+std::ostream& operator<<(std::ostream& os, fixed_string<N> const& str) {
     return os << str.view();
 }
 
@@ -157,7 +157,6 @@ template <std::intmax_t integer, int base>
     requires(base > 1) && (base < digits.size() + 1) constexpr auto ito_fs() {
     //
     fixed_string<detail::num_digits<base>(integer)> result;
-
     {
         std::intmax_t num = integer < 0 ? -integer : integer;
 
@@ -166,7 +165,6 @@ template <std::intmax_t integer, int base>
             num /= base;
         }
     }
-
     if constexpr (integer < 0) {
         result[0] = '-';
     }
@@ -220,7 +218,7 @@ struct expand<fs, std::index_sequence<Is...>> {
 }  // namespace detail
 
 // convert a fixed string of numbers 0-9 & '-' into a superscript fixed_string
-template <auto value>
+template <fixed_string value>
 inline constexpr fixed_string super = detail::super_impl<value>;
 
 }  // namespace fs
