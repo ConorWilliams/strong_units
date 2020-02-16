@@ -131,7 +131,7 @@ struct unit_make_impl<true, S, list<Dims...>> : Type<nameless<S, Dims...>> {};
 // unsorted case
 template <Scale S, Dimension... Dims>
 struct unit_make_impl<false, S, list<Dims...>>
-    : unit_make_impl<true, S, sort_t<Dims...>> {};
+    : unit_make_impl<true, S, sort_dimensions<Dims...>> {};
 
 }  // namespace detail
 
@@ -147,12 +147,20 @@ using unit_make_t =
 // *****************************************************************************
 
 template <typename Target, Scale S, Dimension... Dims>
-struct unit : downcast_child<Target, unit_make_t<S, list<Dims...>>> {};
+struct simple_unit : downcast_child<Target, unit_make_t<S, list<Dims...>>> {};
 
 template <typename Target, fs::fixed_string Sym, Scale S, Dimension... Dims>
-struct named_unit
+struct symbol_unit
     : downcast_child<Target,
                      detail::named_unit<Sym, unit_make_t<S, list<Dims...>>>> {};
+
+template <typename Target, fs::fixed_string Sym, Scale S, Unit U>
+struct scaled_unit
+    : downcast_child<
+          Target,
+          detail::named_unit<
+              Sym, unit_make_t<scale_multiply_t<S, typename U::scale_factor>,
+                               typename U::dimensions>>> {};
 
 ////////////////////////////////////////////////////////////////////////////////
 
@@ -162,7 +170,7 @@ inline constexpr bool dimension_equal_v<A, B> =
     detail::dimension_equal<typename A::dimensions,
                             typename B::dimensions>::value;
 
-// Safe unit conversion but returns raw float, double, etc
+// Dimensionally safe unit conversion but returns raw float, double, etc
 template <Unit From, Unit To>
 [[nodiscard]] constexpr auto raw_convert(
     auto x) requires dimension_equal_v<From, To> {

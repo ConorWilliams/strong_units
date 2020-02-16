@@ -23,13 +23,10 @@
 #pragma once
 
 #include <cstdint>  // std::intmax_t
-#include <numeric>  // gcd
 #include <ratio>
 #include <type_traits>
 
 #include "fixed_string.hpp"
-
-static inline constexpr int INTMAX_LOG_10 = 16;
 
 namespace su {
 
@@ -228,14 +225,13 @@ inline constexpr auto anotate() {
 template <std::intmax_t exponent, typename T>
 requires(exponent > 0) constexpr T pow10() {
     if constexpr (exponent == 0) {
-        return static_cast<T>(1);
+        return T(1);
     } else if constexpr (exponent == 1) {
-        return static_cast<T>(10);
+        return T(10);
     } else if constexpr (exponent % 2 == 0) {
         return pow10<exponent / 2, T>() * pow10<exponent / 2, T>();
     } else {
-        return pow10<exponent / 2, T>() * pow10<exponent / 2, T>() *
-               static_cast<T>(10);
+        return pow10<exponent / 2, T>() * pow10<exponent / 2, T>() * T(10);
     }
 }
 

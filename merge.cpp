@@ -90,27 +90,6 @@ template <Downcastable T>
 using downcast = decltype(detail::downcast_impl<T>());
 
 }  // namespace su
-// The MIT License (MIT)
-//
-// Copyright (c) 2020 Conor Williams
-//
-// Permission is hereby granted, free of charge, to any person obtaining a copy
-// of this software and associated documentation files (the "Software"), to deal
-// in the Software without restriction, including without limitation the rights
-// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-// copies of the Software, and to permit persons to whom the Software is
-// furnished to do so, subject to the following conditions:
-//
-// The above copyright notice and this permission notice shall be included in
-// all copies or substantial portions of the Software.
-//
-// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-// SOFTWARE.
 
 #include <array>
 #include <cstddef>  // std::size_t
@@ -146,7 +125,7 @@ struct fixed_string : std::array<char, N> {
 
 #if __GNUC__ >= 10
 
-    auto operator<=>(const string&) const = default;
+    auto operator<=>(const fixed_string&) const = default;
 
 #endif
 
@@ -208,7 +187,7 @@ inline constexpr auto operator+(fixed_string<I> const& lhs,
 }
 
 template <std::size_t N>
-std::ostream& operator<<(std::ostream& os, const fixed_string<N>& str) {
+std::ostream& operator<<(std::ostream& os, fixed_string<N> const& str) {
     return os << str.view();
 }
 
@@ -235,7 +214,7 @@ constexpr int compare(fixed_string<I> lhs, fixed_string<J> rhs) {
 namespace detail {
 
 template <int base>
-    requires base > 1 constexpr std::size_t num_digits(std::intmax_t x) {
+requires(base > 1) constexpr std::size_t num_digits(std::intmax_t x) {
     return x < 0 ? 1 + num_digits<base>(-x)
                  : x < base ? 1 : 1 + num_digits<base>(x / base);
 }
@@ -247,7 +226,6 @@ template <std::intmax_t integer, int base>
     requires(base > 1) && (base < digits.size() + 1) constexpr auto ito_fs() {
     //
     fixed_string<detail::num_digits<base>(integer)> result;
-
     {
         std::intmax_t num = integer < 0 ? -integer : integer;
 
@@ -256,7 +234,6 @@ template <std::intmax_t integer, int base>
             num /= base;
         }
     }
-
     if constexpr (integer < 0) {
         result[0] = '-';
     }
@@ -310,31 +287,10 @@ struct expand<fs, std::index_sequence<Is...>> {
 }  // namespace detail
 
 // convert a fixed string of numbers 0-9 & '-' into a superscript fixed_string
-template <auto value>
+template <fixed_string value>
 inline constexpr fixed_string super = detail::super_impl<value>;
 
 }  // namespace fs
-// The MIT License (MIT)
-//
-// Copyright (c) 2020 Conor Williams
-//
-// Permission is hereby granted, free of charge, to any person obtaining a copy
-// of this software and associated documentation files (the "Software"), to deal
-// in the Software without restriction, including without limitation the rights
-// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-// copies of the Software, and to permit persons to whom the Software is
-// furnished to do so, subject to the following conditions:
-//
-// The above copyright notice and this permission notice shall be included in
-// all copies or substantial portions of the Software.
-//
-// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-// SOFTWARE.
 
 #include <cstdint>  // std::intmax_t
 #include <numeric>  // gcd
@@ -501,115 +457,6 @@ using scale_divide_t = detail::scale_divide<A, B>::type;
 
 namespace detail {
 
-// Constexpr pow10 function
-template <std::intmax_t exponent>
-constexpr std::conditional_t<(exponent < 308), double, long double>
-pow10_impl() {
-    if constexpr (exponent == 0) {
-        return 1.;
-    } else if constexpr (exponent == 1) {
-        return 10.;
-    } else if constexpr (exponent % 2 == 0) {
-        return pow10_impl<exponent / 2>() * pow10_impl<exponent / 2>();
-    } else {
-        return pow10_impl<exponent / 2>() * pow10_impl<exponent / 2>() * 10;
-    }
-}
-
-template <std::intmax_t exponent>
-constexpr auto pow10() {
-    if constexpr (exponent > 0) {
-        return pow10_impl<exponent>();
-    } else {
-        return 1. / pow10_impl<-exponent>();
-    }
-}
-
-}  // namespace detail
-
-// Could be generalised to arbitrary scale<...> !
-template <Scale From, Scale To>
-inline constexpr auto scale_convert(auto x) {
-    using conversion = scale_divide_t<From, To>;
-
-    constexpr std::intmax_t num = conversion::num;
-    constexpr std::intmax_t den = conversion::den;
-    constexpr std::intmax_t exp = conversion::exp;
-
-    // Avoid floating point multiplication without -ffast-math
-    if constexpr (exp == 0) {
-        if constexpr (num == 1 && den == 1) {
-            return x;
-        } else if constexpr (num != 1 && den == 1) {
-            return x * num;
-        } else if constexpr (num == 1 && den != 1) {
-            return x / static_cast<double>(den);
-        } else {
-            return x * static_cast<double>(num) / den;
-        }
-    } else {
-        // double or long double
-        constexpr auto pow10 = detail::pow10<exp>();
-
-        if constexpr (num == 1 && den == 1) {
-            return x * pow10;
-        } else if constexpr (num != 1 && den == 1) {
-            return (x * num) * pow10;
-        } else if constexpr (num == 1 && den != 1) {
-            return x / static_cast<double>(den) * pow10;
-        } else {
-            return x * static_cast<double>(num) / den * pow10;
-        }
-    }
-
-    // if constexpr (den == 1) {
-    //   // use of common_scale should ensure this den==1 for all implicit
-    //    //  conversions
-    //     if constexpr (num == 1) {
-    //         if constexpr (exp == 0) {
-    //             return x;  // null op
-    //         } else constexpr {
-    //             return 0;
-    //         }
-    //     } else {
-    //     }
-    // } else {
-    //     if constexpr (num == 1) {
-    //         if constexpr (exp == 0) {
-    //         } else {
-    //         }
-    //     } else {
-    //     }
-    // }
-}
-
-namespace detail {
-
-template <Scale S1, Scale S2>
-struct common_scale_impl {
-    static constexpr std::intmax_t gcd_num = std::gcd(S1::num, S2::num);
-
-    static constexpr std::intmax_t gcd_den = std::gcd(S1::den, S2::den);
-
-    // deliberate no use of make_scale to avoid standard form conversion
-    using type = scale<gcd_num, (S1::den / gcd_den) * S2::den,
-                       S1::exp <= S2::exp ? S1::exp : S2::exp>;
-};
-
-// Short-cut for same scales
-template <Scale S>
-struct common_scale_impl<S, S> : Type<S> {};
-
-}  // namespace detail
-
-// Returns the scale factor that is the greatest common multiple of S1 and S2's
-// scale factors such that each scale is only scaled up in a conversion. This
-// avoids integer division where possible. Return scale is not in standard form
-// and therefore scale should used should not be used to make a quantity without
-// first passing through scale_make
-template <Scale S1, Scale S2>
-using common_scale = detail::common_scale_impl<S1, S2>::type;
-
 // Stringifys a scale<> into a minimal "(a/b x 10^c)" like form.
 template <Scale S>
 inline constexpr auto anotate() {
@@ -644,27 +491,70 @@ inline constexpr auto anotate() {
     }
 }
 
+template <std::intmax_t exponent, typename T>
+requires(exponent > 0) constexpr T pow10() {
+    if constexpr (exponent == 0) {
+        return static_cast<T>(1);
+    } else if constexpr (exponent == 1) {
+        return static_cast<T>(10);
+    } else if constexpr (exponent % 2 == 0) {
+        return pow10<exponent / 2, T>() * pow10<exponent / 2, T>();
+    } else {
+        return pow10<exponent / 2, T>() * pow10<exponent / 2, T>() *
+               static_cast<T>(10);
+    }
+}
+
+}  // namespace detail
+
+template <Scale From, Scale To, typename T>
+inline constexpr T scale_convert(T x) {
+    //
+    using ratio = std::ratio_divide<typename From::ratio, typename To::ratio>;
+
+    constexpr std::intmax_t num = ratio::num;
+    constexpr std::intmax_t den = ratio::den;
+    constexpr std::intmax_t exp = From::exp - To::exp;
+
+    // Avoid floating point multiplication without -ffast-math
+    if constexpr (exp == 0) {
+        if constexpr (num == 1 && den == 1) {
+            return x;
+        } else if constexpr (num != 1 && den == 1) {
+            return x * static_cast<T>(num);
+        } else if constexpr (num == 1 && den != 1) {
+            return x / static_cast<T>(den);
+        } else if constexpr (num != 1 && den != 1) {
+            return x * static_cast<T>(num) / static_cast<T>(den);
+        }
+    } else if constexpr (exp > 0) {
+        constexpr T pow10 = detail::pow10<exp, T>();
+
+        if constexpr (num == 1 && den == 1) {
+            return x * pow10;
+        } else if constexpr (num != 1 && den == 1) {
+            return x * static_cast<T>(num) * pow10;
+        } else if constexpr (num == 1 && den != 1) {
+            return x / static_cast<T>(den) * pow10;
+        } else if constexpr (num != 1 && den != 1) {
+            return x * static_cast<T>(num) / static_cast<T>(den) * pow10;
+        }
+    } else if constexpr (exp < 0) {
+        constexpr T pow10 = detail::pow10<-exp, T>();
+
+        if constexpr (num == 1 && den == 1) {
+            return x / pow10;
+        } else if constexpr (num != 1 && den == 1) {
+            return x * static_cast<T>(num) / pow10;
+        } else if constexpr (num == 1 && den != 1) {
+            return x / static_cast<T>(den) / pow10;
+        } else if constexpr (num != 1 && den != 1) {
+            return x * static_cast<T>(num) / static_cast<T>(den) / pow10;
+        }
+    }
+}
+
 }  // namespace su
-//
-// Copyright (c) 2020 Conor Williams
-//
-// Permission is hereby granted, free of charge, to any person obtaining a copy
-// of this software and associated documentation files (the "Software"), to deal
-// in the Software without restriction, including without limitation the rights
-// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-// copies of the Software, and to permit persons to whom the Software is
-// furnished to do so, subject to the following conditions:
-//
-// The above copyright notice and this permission notice shall be included in
-// all copies or substantial portions of the Software.
-//
-// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-// SOFTWARE.
 
 #include <cstddef>  // std::size_t
 #include <cstdint>  // std::intmax_t
@@ -698,9 +588,13 @@ struct dimension_tag {};  // Marks class as being a dimension type.
 
 }  // namespace detail
 
-// Defaults required for variadic instantiation
+// *****************************************************************************
+// *               User access point for making new dimensions                 *
+// *****************************************************************************
+
+// Dimension base class. Defaults required for variadic instantiation
 template <fs::fixed_string Str, std::intmax_t I = 1, std::intmax_t J = 1>
-struct DimensionBase : private detail::dimension_tag {
+struct dimension : private detail::dimension_tag {
     using exp = std::ratio<I, J>;
 
     static constexpr std::intmax_t num = exp::num;
@@ -708,6 +602,8 @@ struct DimensionBase : private detail::dimension_tag {
 
     static constexpr fs::fixed_string symbol = Str;
 };
+
+////////////////////////////////////////////////////////////////////////////////
 
 template <typename T>
 concept Dimension = std::is_base_of_v<detail::dimension_tag, T>;
@@ -740,8 +636,8 @@ struct dimension_equal<A, B> {
 };
 
 template <Dimension... Dl, Dimension... Dr>
-    requires sizeof...(Dl) ==
-    sizeof...(Dr) struct dimension_equal<list<Dl...>, list<Dr...>> {
+requires(sizeof...(Dl) ==
+         sizeof...(Dr)) struct dimension_equal<list<Dl...>, list<Dr...>> {
     static constexpr bool value =
         std::conjunction_v<dimension_equal<Dl, Dr>...>;
 };
@@ -800,7 +696,6 @@ template <typename, typename>
 struct dimension_multiply;
 
 }
-
 // Returns new dimension with same type but and new exponent equal to the
 // product of std::ratio O and the argument dimensions' exponent.
 template <typename D, typename Ratio>
@@ -818,8 +713,6 @@ struct dimension_multiply<Dim<Is...>, Ratio> {
 template <typename Ratio, Dimension... Dims>
 struct dimension_multiply<list<Dims...>, Ratio>
     : Type<list<dimension_multiply_t<Dims, Ratio>...>> {};
-
-}  // namespace detail
 
 // Extracts symbol from dimension and returns symbol as a static string
 // decorated with exponent in minimal "symbol^x/y" like form.
@@ -841,8 +734,6 @@ inline constexpr auto anotate() {
                "}"_fs;
     }
 }
-
-namespace detail {
 
 template <typename>
 struct ordered_impl;
@@ -983,26 +874,6 @@ template <Dimension... Dims>
 using sort_t = detail::sort_impl<list<>, list<Dims>...>::type;
 
 }  // namespace su
-//
-// Copyright (c) 2020 Conor Williams
-//
-// Permission is hereby granted, free of charge, to any person obtaining a copy
-// of this software and associated documentation files (the "Software"), to deal
-// in the Software without restriction, including without limitation the rights
-// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-// copies of the Software, and to permit persons to whom the Software is
-// furnished to do so, subject to the following conditions:
-//
-// The above copyright notice and this permission notice shall be included in
-// all copies or substantial portions of the Software.
-//
-// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-// SOFTWARE.
 
 #include <type_traits>
 
@@ -1054,7 +925,7 @@ struct nameless : downcast_base<nameless<S, Dims...>>, detail::unit_tag {
 
     // Symbol contains scale info and dimension symbols / exponents.
     static constexpr fs::fixed_string m_base_symbol =
-        detail::join(anotate<S>(), anotate<Dims>()...);
+        detail::join(detail::anotate<S>(), detail::anotate<Dims>()...);
 
     static constexpr fs::fixed_string m_symbol = m_base_symbol;
 };
@@ -1063,13 +934,14 @@ template <typename T>
 concept Unit = std::is_base_of_v<detail::unit_tag, T>;
 
 // Units which have scale<1, 1, 0> are coherent and therefore we can exclude
-// that from the template parameter to shorten the quantity definition.
+// the scale from the template parameter list to shorten the quantity
+// definition.
 template <Dimension... Dims>
-struct coherent : nameless<scale<>> {};
+struct coherent : nameless<scale<>, Dims...> {};
 
 namespace detail {
 
-// General case use downcast
+// Case for unique downcast
 template <Unit U, Unit D>
 struct downcast_unit_impl : Type<D> {};
 
@@ -1080,12 +952,12 @@ struct downcast_unit_impl<U, nameless<scale<>, Dims...>>
 
 // General case for no downcast
 template <Unit U>
-requires !std::is_same_v<typename U::scale_factor,
-                         scale<>> struct downcast_unit_impl<U, U> : Type<U> {};
+requires(!std::is_same_v<typename U::scale_factor,
+                         scale<>>) struct downcast_unit_impl<U, U> : Type<U> {};
 
 }  // namespace detail
 
-// Downcast a unit to either a user defined unit a 'coherent' unit or a
+// Downcast a unit to either an user defined unit an 'coherent' unit or an
 // non-coherent 'nameless' unit
 template <Unit U>
 using downcast_unit = detail::downcast_unit_impl<U, downcast<U>>::type;
@@ -1111,8 +983,8 @@ struct unit_make_impl<false, S, list<Dims...>>
 
 }  // namespace detail
 
-// Makes a unit type from a dimension list<...> by simplifying and sorting the
-// it and simplifying the scale.
+// Makes a unit type from a dimension list<...> by simplifying and sorting it
+// and simplifying the scale.
 template <Scale S, List L>
 using unit_make_t =
     detail::unit_make_impl<ordered_v<L>, scale_make<S::num, S::den, S::exp>,
@@ -1147,27 +1019,6 @@ template <Unit From, Unit To>
 }
 
 }  // namespace su
-// The MIT License (MIT)
-//
-// Copyright (c) 2020 Conor Williams
-//
-// Permission is hereby granted, free of charge, to any person obtaining a copy
-// of this software and associated documentation files (the "Software"), to deal
-// in the Software without restriction, including without limitation the rights
-// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-// copies of the Software, and to permit persons to whom the Software is
-// furnished to do so, subject to the following conditions:
-//
-// The above copyright notice and this permission notice shall be included in
-// all copies or substantial portions of the Software.
-//
-// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-// SOFTWARE.
 
 #include <ostream>
 #include <type_traits>
@@ -1178,22 +1029,75 @@ template <Unit From, Unit To>
 
 namespace su {
 
+using scalar_unit = nameless<scale<>>;
+
 template <typename T>
 concept Arithmetic = std::is_arithmetic_v<T>;
-
-namespace detail {
-struct quantity_tag {};
-}  // namespace detail
-
-template <typename T>
-concept Quantity = std::is_base_of_v<detail::quantity_tag, T>;
 
 template <Unit U, Arithmetic Rep = double>
 class quantity;
 
+/////////////////////////////////////////////////////////////////////////////
+
+namespace detail {
+// Returns the scale factor that is the greatest common multiple of S1 and S2's
+// scale factors such that each scale is only scaled up in a conversion. This
+// avoids integer division where possible. Return scale is not in standard form
+// and therefore scale should used should not be used to make a quantity without
+// first passing through scale_make
+template <Scale S1, Scale S2>
+struct common_scale {
+    static constexpr std::intmax_t gcd_num = std::gcd(S1::num, S2::num);
+    static constexpr std::intmax_t gcd_den = std::gcd(S1::den, S2::den);
+
+    // Deliberate no use of make_scale to avoid standard form conversion
+    using type = scale<gcd_num, (S1::den / gcd_den) * S2::den,
+                       S1::exp <= S2::exp ? S1::exp : S2::exp>;
+};
+// Short-cut for same scales
+template <Scale S>
+struct common_scale<S, S> : Type<S> {};
+
+}  // namespace detail
+
+// Utility struct to make an non-normalised quantity that two units can be
+// safely converted to and perform conversion.
+template <Unit U1, typename R1, Unit U2, typename R2>
+requires dimension_equal_v<U1, U2> struct common_help {
+   private:
+    using S1 = U1::scale_factor;
+    using S2 = U2::scale_factor;
+
+   public:
+    using scale = detail::common_scale<S1, S2>::type;
+    using dimension = U1::dimensions;  // == U2::dimension
+
+   private:
+    // Using a common quantity and constructors to do the conversion to avoid
+    // division and provide symmetry to operations. Also throws warnings in
+    // case of narrowing conversions in constructors. Bypass unit_make_t to
+    // avoid scale conversion to standard form.
+    //
+    using irreg_unit = detail::unit_make_impl<true, scale, dimension>::type;
+    using irreg_quantity = quantity<irreg_unit, std::common_type_t<R1, R2>>;
+
+   public:
+    template <typename Quant>
+    static constexpr auto conv(Quant x) {
+        return irreg_quantity(x).get();
+    }
+
+    using unit = downcast_unit<unit_make_t<scale, dimension>>;
+};
+
+///////////////////////////////////////////////////////////////////////////////
+
 // The libraries central type.
 template <Unit U, Arithmetic Rep>
-class quantity : private detail::quantity_tag {
+class quantity {
+   private:
+    Rep m_value;
+
    public:
     using value_type = Rep;
     using unit = U;
@@ -1205,11 +1109,11 @@ class quantity : private detail::quantity_tag {
     quantity& operator=(quantity const&) = default;
     quantity& operator=(quantity&&) = default;
 
-    constexpr quantity(Arithmetic value) : m_value{value} {};
+    constexpr explicit quantity(Arithmetic value) : m_value{value} {};
 
-    // Conversions occur hear
+    // All conversions occur hear. Causes warnings if raw_convert type != Rep
     template <Unit U2, Arithmetic Rep2>
-    requires dimension_equal_v<U, U2> constexpr quantity(
+    requires dimension_equal_v<U, U2> explicit constexpr quantity(
         quantity<U2, Rep2> other)
         : m_value{raw_convert<U2, U>(other.get())} {}
 
@@ -1230,21 +1134,29 @@ class quantity : private detail::quantity_tag {
 
     [[nodiscard]] constexpr Rep get() const noexcept { return m_value; }
 
-    inline constexpr quantity operator-() const { return quantity(-get()); }
+    [[nodiscard]] inline constexpr quantity operator-() const {
+        return quantity(-get());
+    }
+
+    [[nodiscard]] constexpr quantity operator+() const { return *this; }
 
     constexpr quantity& operator++() {
         ++m_value;
         return *this;
     }
 
-    constexpr quantity operator++(int) { return quantity(m_value++); }
+    [[nodiscard]] constexpr quantity operator++(int) {
+        return quantity(m_value++);
+    }
 
     constexpr quantity& operator--() {
         --m_value;
         return *this;
     }
 
-    constexpr quantity operator--(int) { return quantity(m_value--); }
+    [[nodiscard]] constexpr quantity operator--(int) {
+        return quantity(m_value--);
+    }
 
     template <Unit U2, Arithmetic Rep2>
     requires dimension_equal_v<U, U2> constexpr quantity& operator+=(
@@ -1260,6 +1172,17 @@ class quantity : private detail::quantity_tag {
         return *this;
     }
 
+    // modulo follow addition / subtraction rules e.g 4cm % 3cm = 1cm This is
+    // due to the requirement of the existence of a scalar k such that:
+    // k * 3cm + 1cm = 4cm
+    template <Unit U2, Arithmetic Rep2>
+    requires dimension_equal_v<U, U2>
+        // && requires(Rep v1, Rep v2) {v1 %= v2;} // gcc bug?
+        constexpr quantity& operator%=(quantity<U2, Rep2> other) {
+        m_value %= quantity(other).get();
+        return *this;
+    }
+
     constexpr quantity& operator*=(Arithmetic rhs) {
         m_value *= rhs;
         return *this;
@@ -1270,212 +1193,135 @@ class quantity : private detail::quantity_tag {
         return *this;
     }
 
+   private:
+    friend std::ostream& operator<<(std::ostream& os, quantity obj) {
+        return os << obj.get() << ' ' << U::m_symbol;
+    }
+};
+
 #if __GNUC__ >= 10
 
-    template <Unit U2, Arithmetic Rep2>
-    requires dimension_equal_v<U, U2> friend constexpr auto operator<=>(
-        quantity lhs, quantity<U2, Rep2> rhs) {
-        return get() <=> raw_convert<U2, U>(other.get());
-    }
+template <Unit U1, Arithmetic Rep1, Unit U2, Arithmetic Rep2>
+[[nodiscard]] inline constexpr auto operator<=>(
+    quantity<U1, Rep1> lhs,
+    quantity<U2, Rep2> rhs) requires dimension_equal_v<U1, U2> {
+    //
+    using common = common_help<U1, Rep1, U2, Rep2>;
+    return common::conv(lhs) <=> common::conv(rhs);
+}
 
 #endif
 
-    // template <Unit U2, Arithmetic Rep2>
-    // requires dimension_equal_v<U, U2> friend constexpr auto operator==(
-    //     quantity lhs, quantity<U2, Rep2> rhs) r {
-    //     return cq(lhs).count() == cq(rhs).count();
-    // }
+template <Unit U1, Arithmetic Rep1, Unit U2, Arithmetic Rep2>
+[[nodiscard]] inline constexpr auto operator==(
+    quantity<U1, Rep1> lhs,
+    quantity<U2, Rep2> rhs) requires dimension_equal_v<U1, U2> {
+    //
+    using common = common_help<U1, Rep1, U2, Rep2>;
+    return common::conv(lhs) == common::conv(rhs);
+}
 
-    friend std::ostream& operator<<(std::ostream& os, const quantity obj) {
-        return os << obj.get();
-    }
+template <Unit U1, Arithmetic Rep1, Unit U2, Arithmetic Rep2>
+[[nodiscard]] inline constexpr auto operator+(
+    quantity<U1, Rep1> lhs,
+    quantity<U2, Rep2> rhs) requires dimension_equal_v<U1, U2> {
+    //
+    using common = common_help<U1, Rep1, U2, Rep2>;
+    using return_rep = decltype(common::conv(lhs) + common::conv(rhs));
 
-   private:
-    Rep m_value;
+    using quantity_t = quantity<typename common::unit, return_rep>;
+    return quantity_t{common::conv(lhs) + common::conv(rhs)};
+}
 
-    // hidden operators
-};
+template <Unit U1, Arithmetic Rep1, Unit U2, Arithmetic Rep2>
+[[nodiscard]] inline constexpr auto operator-(
+    quantity<U1, Rep1> lhs,
+    quantity<U2, Rep2> rhs) requires dimension_equal_v<U1, U2> {
+    //
+    using common = common_help<U1, Rep1, U2, Rep2>;
+    using return_rep = decltype(common::conv(lhs) - common::conv(rhs));
+
+    using quantity_t = quantity<typename common::unit, return_rep>;
+    return quantity_t{common::conv(lhs) - common::conv(rhs)};
+}
+
+// clang-format off
+template <Unit U1, Arithmetic Rep1, Unit U2, Arithmetic Rep2>
+[[nodiscard]] inline constexpr auto operator%(
+    quantity<U1, Rep1> lhs,
+    quantity<U2, Rep2> rhs) 
+
+    requires dimension_equal_v<U1, U2> && 
+    requires (std::common_type_t<Rep1, Rep2> x) {x % x;}
+{
+    using common = common_help<U1, Rep1, U2, Rep2>;
+    using return_rep = decltype(common::conv(lhs) % common::conv(rhs));
+
+    using quantity_t = quantity<typename common::unit, return_rep>;
+    return quantity_t{common::conv(lhs) % common::conv(rhs)};
+}
+// clang-format on
+
+template <Unit U1, Arithmetic Rep1, Unit U2, Arithmetic Rep2>
+[[nodiscard]] inline constexpr auto operator*(quantity<U1, Rep1> lhs,
+                                              quantity<U2, Rep2> rhs) {
+    //
+    using unit_t = unit_make_t<
+        scale_multiply_t<typename U1::scale_factor, typename U2::scale_factor>,
+        merge_sum_sorted_t<typename U1::dimensions, typename U2::dimensions>>;
+
+    using quantity_t =
+        quantity<downcast_unit<unit_t>, decltype(lhs.get() * rhs.get())>;
+
+    return quantity_t{lhs.get() * rhs.get()};
+}
+
+template <Unit U1, Arithmetic Rep1, Unit U2, Arithmetic Rep2>
+[[nodiscard]] inline constexpr auto operator/(quantity<U1, Rep1> lhs,
+                                              quantity<U2, Rep2> rhs) {
+    //
+    using dimensions = merge_sum_sorted_t<
+        typename U1::dimensions,
+        dimension_multiply_t<typename U2::dimensions, std::ratio<-1>>>;
+
+    using unit_t = unit_make_t<
+        scale_divide_t<typename U1::scale_factor, typename U2::scale_factor>,
+        dimensions>;
+
+    using quanity_t =
+        quantity<downcast_unit<unit_t>, decltype(lhs.get() / rhs.get())>;
+
+    return quanity_t{lhs.get() / rhs.get()};
+}
+
+template <Unit U, Arithmetic Rep>
+[[nodiscard]] inline constexpr auto operator*(quantity<U, Rep> lhs,
+                                              Arithmetic rhs) {
+    return lhs * quantity<scalar_unit, decltype(rhs)>{rhs};
+}
+
+template <Unit U, Arithmetic Rep>
+[[nodiscard]] inline constexpr auto operator*(Arithmetic lhs,
+                                              quantity<U, Rep> rhs) {
+    return quantity<scalar_unit, decltype(lhs)>{lhs} * rhs;
+}
+
+template <Unit U, Arithmetic Rep>
+[[nodiscard]] inline constexpr auto operator/(quantity<U, Rep> lhs,
+                                              Arithmetic rhs) {
+    return lhs / quantity<scalar_unit, decltype(rhs)>{rhs};
+}
+
+template <Unit U, Arithmetic Rep>
+[[nodiscard]] inline constexpr auto operator/(Arithmetic lhs,
+                                              quantity<U, Rep> rhs) {
+    return quantity<scalar_unit, decltype(lhs)>{lhs} / rhs;
+}
 
 /////////////////////////////////  operators //////////////////////////////////
 
-template <Unit U1, Arithmetic R1, Unit U2, Arithmetic R2>
-constexpr inline auto operator+(
-    quantity<U1, R1> const lhs,
-    quantity<U2, R2> const rhs) requires dimension_equal_v<U1, U2> {
-    // Using a common quantity and constructors to do the conversion to avoid
-    // division and provide symmetry to + operation. Also throws warnings in
-    // case of narrowing conversions in constructors;
-    using common_s =
-        common_scale<typename U1::scale_factor, typename U2::scale_factor>;
-
-    // int i = typename U1::scale_factor{};
-
-    // Bypass unit_make_t to prevent conversion to standard form of scale.
-    using common_q =
-        quantity<typename detail::unit_make_impl<true, common_s,
-                                                 typename U1::dimensions>::type,
-                 std::common_type_t<R1, R2>>;
-
-    using rep = decltype(common_q(lhs).get() + common_q(rhs).get());
-
-    // Now use unit_make_t to simplify scale.
-    using quantity_t =
-        quantity<downcast_unit<unit_make_t<common_s, typename U1::dimensions>>,
-                 rep>;
-
-    return quantity_t{common_q(lhs).get() + common_q(rhs).get()};
-}
-
-// template <Unit Ul, Arithmetic Tl, Unit Ur, Arithmetic Tr>
-// constexpr inline auto operator-(
-//     quantity<Ul, Tl> const lhs,
-//     quantity<Ur, Tr> const rhs) requires dimension_equal_v<Ul, Ur> {
-//     //
-//     using quantity_t =
-//         quantity<Ul, decltype(lhs.get() - raw_convert<Ur, Ul>(rhs.get()))>;
-
-//     return quantity_t{lhs.get() - raw_convert<Ur, Ul>(rhs.get())};
-// }
-
-// template <Unit Ul, Arithmetic Tl, Unit Ur, Arithmetic Tr>
-// constexpr inline auto operator*(quantity<Ul, Tl> const lhs,
-//                                 quantity<Ur, Tr> const rhs) {
-//     //
-//     using unit_t = unit_make_from_sorted_t<
-//         scale_multiply_t<typename Ul::scale_factor, typename
-//         Ur::scale_factor>, merge_sum_sorted_t<typename Ul::dimensions,
-//         typename Ur::dimensions>>;
-
-//     using quanity_t =
-//         quantity<downcast_unit<unit_t>, decltype(lhs.get() * rhs.get())>;
-
-//     return quanity_t{lhs.get() * rhs.get()};
-// }
-
-// template <Unit Ul, Arithmetic Tl, Unit Ur, Arithmetic Tr>
-// constexpr inline auto operator/(quantity<Ul, Tl> const lhs,
-//                                 quantity<Ur, Tr> const rhs) {
-//     //
-//     using dimensions = merge_sum_sorted_t<
-//         typename Ul::dimensions,
-//         dimension_multiply_t<typename Ur::dimensions, std::ratio<-1>>>;
-
-//     using unit_t = unit_make_from_sorted_t<
-//         scale_divide_t<typename Ul::scale_factor, typename Ur::scale_factor>,
-//         dimensions>;
-
-//     using quanity_t =
-//         quantity<downcast_unit<unit_t>, decltype(lhs.get() / rhs.get())>;
-
-//     return quanity_t{lhs.get() / rhs.get()};
-// }
-
-// constexpr inline auto operator*(Quantity lhs, Arithmetic rhs) {
-//     return lhs * quantity<nameless<scale<>>, decltype(rhs)>{rhs};
-// }
-
-// constexpr inline auto operator*(Arithmetic lhs, Quantity rhs) {
-//     return quantity<nameless<scale<>>, decltype(lhs)>{lhs} * rhs;
-// }
-
-// constexpr inline auto operator/(Quantity lhs, Arithmetic rhs) {
-//     return lhs / quantity<nameless<scale<>>, decltype(rhs)>{rhs};
-// }
-
-// constexpr inline auto operator/(Arithmetic lhs, Quantity rhs) {
-//     return quantity<nameless<scale<>>, decltype(lhs)>{lhs} / rhs;
-// }
-
 }  // namespace su
 #include <iostream>
-
-// namespace su::nope {
-
-// #pragma GCC diagnostic push
-// #pragma GCC diagnostic ignored "-Wnon-template-friend"
-
-// template <typename BaseType>
-// struct downcast_base {
-//     using base_type = BaseType;
-
-//     friend auto downcast_guide(downcast_base);
-// };
-
-// #pragma GCC diagnostic pop
-
-// template <Scale S, typename... Ts>
-// struct UNIT : downcast_base<UNIT<S, Ts...>> {};
-
-// template <typename T>
-// concept Downcastable = requires {
-//     typename T::base_type;
-// }
-// &&std::is_base_of_v<downcast_base<typename T::base_type>, T>;
-
-// template <typename Target, Downcastable T>
-// struct downcast_helper : T {
-//     friend auto downcast_guide(typename downcast_helper::downcast_base) {
-//         return Target();
-//     }
-// };
-
-// template <typename Child, typename... Es>
-// struct derived_dimension : downcast_helper<Child, UNIT<Es...>> {};
-
-// template <typename T>
-// concept has_downcast = requires {
-//     downcast_guide(std::declval<downcast_base<T>>());
-// };
-
-// template <typename T>
-// constexpr auto downcast_target_impl() {
-//     if constexpr (has_downcast<T>) {
-//         return decltype(downcast_guide(std::declval<downcast_base<T>>()))();
-//     } else {
-//         return T{};
-//     }
-// }
-
-// template <Downcastable T>
-// using downcast_target = decltype(downcast_target_impl<T>());
-
-// ////////////////////////////////////////////////////////
-
-// template <template <typename> typename CRTP, fs::fixed_string Sym, Arithmetic
-// T,
-//           Scale S, Dimension... Dims>
-
-// struct named_unit : unit_make<T, S, Dims...> {
-//     static constexpr auto self = named_unit<CRTP, Sym, T, S, Dims...>{};
-
-//     using unit_make<T, S, Dims...>::unit;
-//     using unit_make<T, S, Dims...>::operator=;
-
-//     [[nodiscard]] inline static constexpr std::string_view symbol() noexcept
-//     {
-//         return m_symbol.view();
-//     }
-
-//     static constexpr fs::fixed_string m_symbol = Sym;
-// };
-
-// struct timer : derived_dimension<timer, scale<>, si::time<>> {};
-
-// struct velocity : derived_dimension<velocity, scale<>, length<>> {};
-
-// // struct minute: named_unit<minute, "min", su::scale<60>, si::second<>>;
-
-// // quant<minute, double> elapsed_time;
-
-// // quant<hour> final = elapsed_time
-
-// template <typename T>
-// struct conor : named_unit<conor, "conors", double, scale<>, length<>> {
-//     using named_unit<conor, "conors", double, scale<>, length<>>::named_unit;
-//     using named_unit<conor, "conors", double, scale<>, length<>>::operator=;
-// };
-
-// }  // namespace su::nope
 
 namespace si {
 
@@ -1483,13 +1329,13 @@ namespace si {
 // TODO : static constexpr in functions
 
 // clang-format off
-template <std::intmax_t... Is> struct              length : su::DimensionBase<  "m", Is...> {};
-template <std::intmax_t... Is> struct                time : su::DimensionBase<  "s", Is...> {};
-template <std::intmax_t... Is> struct                mass : su::DimensionBase< "kg", Is...> {};
-template <std::intmax_t... Is> struct             current : su::DimensionBase<  "A", Is...> {};
-template <std::intmax_t... Is> struct          temprature : su::DimensionBase<  "K", Is...> {};
-template <std::intmax_t... Is> struct              amount : su::DimensionBase<"mol", Is...> {};
-template <std::intmax_t... Is> struct  luminous_intensity : su::DimensionBase< "cd", Is...> {};
+template <std::intmax_t... Is> struct              length : su::dimension<  "m", Is...> {};
+template <std::intmax_t... Is> struct                time : su::dimension<  "s", Is...> {};
+template <std::intmax_t... Is> struct                mass : su::dimension< "kg", Is...> {};
+template <std::intmax_t... Is> struct             current : su::dimension<  "A", Is...> {};
+template <std::intmax_t... Is> struct          temprature : su::dimension<  "K", Is...> {};
+template <std::intmax_t... Is> struct              amount : su::dimension<"mol", Is...> {};
+template <std::intmax_t... Is> struct  luminous_intensity : su::dimension< "cd", Is...> {};
 
 struct    scalar : su::named_unit<   scalar,      "scalar",        su::scale<>> {};
 
@@ -1504,7 +1350,7 @@ struct  candelas : su::unit< candelas, su::scale<>, luminous_intensity<>> {};
 
 struct     hertz : su::named_unit<hertz, "Hz", su::scale<>, time<-1>> {};
 
-struct kilometres : su::named_unit<kilometres, "km",  su::scale<1,1,3>,  length<>> {};
+struct kilometres : su::named_unit<kilometres, "km",  su::scale<1, 7, 3>,  length<>> {};
 
 struct meters_per_second : su::unit<meters_per_second, su::scale<>, length<>, time<-1>  > {};
 
@@ -1516,40 +1362,47 @@ struct meters_per_second : su::unit<meters_per_second, su::scale<>, length<>, ti
 
 using su::quantity;
 
-struct a : su::named_unit<a, "a", su::scale<30, 7, -1>, si::length<>> {};
-struct b : su::named_unit<b, "b", su::scale<5, 2>, si::length<>> {};
+struct a : su::named_unit<a, "a", su::scale<2, 1, 4>, si::length<>> {};
+struct b : su::named_unit<b, "b", su::scale<1, 1, 2>, si::length<>> {};
 
-inline constexpr quantity<si::seconds, double> bear_oclock{12.};
+inline constexpr quantity<si::candelas, double> bear_oclock{12.};
 
 // quantity operators
 
+#include <iomanip>
+#include <vector>
+
 int main() {
-    quantity<a, double> m{1.};
+    quantity<si::metres, double> m{5.};
 
-    quantity<b, double> km{1.};
+    constexpr quantity<si::kilometres, double> km{3.};
 
-    quantity<si::metres> sum = m + km;
+    quantity<si::kelvin> sum{3.};
 
-    // int i = km + m;
+    // auto t = km * sum;
 
-    std::cout << m + km << ' ' << (m + km).base_symbol() << std::endl;
-    std::cout << km << ' ' << (km).symbol() << std::endl;
-    std::cout << sum << ' ' << (sum).symbol() << std::endl;
+    // bool res = m == km;
+    auto t = km + m;
+    // quantity<si::kilometres, double> c = m + km;
+
+    std::cout << (t) << std::endl;
+    // std::cout << t << std::endl;
+    // std::cout << std::setprecision(6) << km + m << std::endl;
 
     //
-    int num1 = 51;
-    int den1 = 10;
-    int Exp1 = 1;
+    // int num1 = 3;
+    // int den1 = 1;
+    // int Exp1 = 1;
 
-    int num2 = 5;
-    int den2 = 1;
-    int Exp2 = 0;
+    // int num2 = 20;
+    // int den2 = 7;
+    // int Exp2 = 0;
 
-    std::intmax_t gcd_num = std::gcd(num1, num2);
-    std::intmax_t gcd_den = std::gcd(den1, den2);
+    // std::intmax_t gcd_num = std::gcd(num1, num2);
+    // std::intmax_t gcd_den = std::gcd(den1, den2);
 
-    std::cout << gcd_num << '/' << (den1 / gcd_den) * den2 << '^'
-              << std::min(Exp1, Exp2) << std::endl;
+    // std::cout << gcd_num << '/' << (den1 / gcd_den) * den2 << "x10^"
+    //           << std::min(Exp1, Exp2) << std::endl;
 
     return 0;
 }

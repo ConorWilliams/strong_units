@@ -13,27 +13,26 @@ template <std::intmax_t... Is> struct                time : su::dimension<  "s",
 template <std::intmax_t... Is> struct                mass : su::dimension< "kg", Is...> {};
 template <std::intmax_t... Is> struct             current : su::dimension<  "A", Is...> {};
 template <std::intmax_t... Is> struct          temprature : su::dimension<  "K", Is...> {};
-template <std::intmax_t... Is> struct              amount : su::dimension<"mol", Is...> {};
+template <std::intmax_t... Is> struct           substance : su::dimension<"mol", Is...> {};
 template <std::intmax_t... Is> struct  luminous_intensity : su::dimension< "cd", Is...> {};
 
-struct    scalar : su::named_unit<   scalar,      "scalar",        su::scale<>> {};
+struct    scalar : su::symbol_unit<   scalar,      "scalar",        su::scale<>> {};
 
-struct    metres : su::unit<   metres, su::scale<>,             length<>> {};
-struct   seconds : su::unit<  seconds, su::scale<>,               time<>> {};
-struct kilograms : su::unit<kilograms, su::scale<>,               mass<>> {};
-struct   amperes : su::unit<  amperes, su::scale<>,            current<>> {};
-struct    kelvin : su::unit<   kelvin, su::scale<>,         temprature<>> {};
-struct     moles : su::unit<    moles, su::scale<>,             amount<>> {};
-struct  candelas : su::unit< candelas, su::scale<>, luminous_intensity<>> {};
+struct    metres : su::simple_unit<   metres, su::scale<>,             length<>> {};
+struct   seconds : su::simple_unit<  seconds, su::scale<>,               time<>> {};
+struct kilograms : su::simple_unit<kilograms, su::scale<>,               mass<>> {};
+struct   amperes : su::simple_unit<  amperes, su::scale<>,            current<>> {};
+struct    kelvin : su::simple_unit<   kelvin, su::scale<>,         temprature<>> {};
+struct     moles : su::simple_unit<    moles, su::scale<>,          substance<>> {};
+struct  candelas : su::simple_unit< candelas, su::scale<>, luminous_intensity<>> {};
 
 
-struct     hertz : su::named_unit<hertz, "Hz", su::scale<>, time<-1>> {};
+struct     hertz : su::symbol_unit<hertz, "Hz", su::scale<>, time<-1>> {};
 
-struct kilometres : su::named_unit<kilometres, "km",  su::scale<1, 7, 3>,  length<>> {};
+struct kilometres : su::symbol_unit<kilometres, "km",  su::scale<1, 7, 3>,  length<>> {};
 
-struct meters_per_second : su::unit<meters_per_second, su::scale<>, length<>, time<-1>  > {};
+struct meters_per_second : su::simple_unit<meters_per_second, su::scale<>, length<>, time<-1>  > {};
 
-// clang-format on
 
 }  // namespace si
 
@@ -41,8 +40,17 @@ struct meters_per_second : su::unit<meters_per_second, su::scale<>, length<>, ti
 
 using su::quantity;
 
-struct a : su::named_unit<a, "a", su::scale<2, 1, 4>, si::length<>> {};
-struct b : su::named_unit<b, "b", su::scale<1, 1, 2>, si::length<>> {};
+struct a : su::symbol_unit<a, "a", su::scale<2, 1, 4>, si::length<>> {};
+struct b : su::symbol_unit<b, "b", su::scale<1, 1, 9>, si::length<>> {};
+
+struct   feet : su::symbol_unit<  feet,   "ft", su::scale<3048, 10000>, si::length<>> {};
+struct inches : su::scaled_unit<inches, "inch",       su::scale<1, 12>,         feet> {};
+
+//struct tw :  su::scaled_unit<tw, "w12", su::scale<12>,   si::metres> {};
+struct tw : su::symbol_unit<tw, "tw", su::scale<79>, si::length<>> {};
+struct ti : su::symbol_unit<ti, "ti", su::scale<3>, si::length<>> {};
+
+// clang-format on
 
 inline constexpr quantity<si::candelas, double> bear_oclock{12.};
 
@@ -52,36 +60,36 @@ inline constexpr quantity<si::candelas, double> bear_oclock{12.};
 #include <vector>
 
 int main() {
-    quantity<si::metres, double> m{5.};
+    quantity<si::metres> a{1.};
+    quantity<tw> b{1.};
 
-    constexpr quantity<si::kilometres, double> km{3.};
+    std::cout << (quantity<tw>{1.} + quantity<ti>{1.}) << std::endl;
 
-    quantity<si::kelvin> sum{3.};
-
-    // auto t = km * sum;
-
-    // bool res = m == km;
-    auto t = km + m;
-    // quantity<si::kilometres, double> c = m + km;
-
-    std::cout << (t) << std::endl;
-    // std::cout << t << std::endl;
-    // std::cout << std::setprecision(6) << km + m << std::endl;
-
+    // std::cout << a.symbol() << std::endl;
+    // std::cout << b.base_symbol() << std::endl;
     //
-    // int num1 = 3;
-    // int den1 = 1;
-    // int Exp1 = 1;
+    std::cout << quantity<si::metres>{quantity<tw>{1.} + quantity<ti>{1.}};
 
-    // int num2 = 20;
-    // int den2 = 7;
-    // int Exp2 = 0;
+    using help = su::common_help<si::metres, double, tw, double>;
 
-    // std::intmax_t gcd_num = std::gcd(num1, num2);
-    // std::intmax_t gcd_den = std::gcd(den1, den2);
+    std::cout << help::num << '/' << help::den << '^' << help::exp << std::endl;
 
-    // std::cout << gcd_num << '/' << (den1 / gcd_den) * den2 << "x10^"
-    //           << std::min(Exp1, Exp2) << std::endl;
+    // int j = quantity<inches>::unit::scale_factor{};
+    // int i = help::S2{};
+
+    int num1 = 5;
+    int den1 = 1;
+    int Exp1 = -1;
+
+    int num2 = 1;
+    int den2 = 1;
+    int Exp2 = 0;
+
+    std::intmax_t gcd_num = std::gcd(num1, num2);
+    std::intmax_t gcd_den = std::lcm(den1, den2);
+
+    std::cout << gcd_num << '/' << gcd_den << "x10^" << std::min(Exp1, Exp2)
+              << std::endl;
 
     return 0;
 }

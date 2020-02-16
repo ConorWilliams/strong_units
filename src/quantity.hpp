@@ -22,6 +22,7 @@
 
 #pragma once
 
+#include <numeric>  // gcd / lcm
 #include <ostream>
 #include <type_traits>
 
@@ -43,55 +44,44 @@ class quantity;
 
 /////////////////////////////////////////////////////////////////////////////
 
-namespace detail {
-// Returns the scale factor that is the greatest common multiple of S1 and S2's
-// scale factors such that each scale is only scaled up in a conversion. This
-// avoids integer division where possible. Return scale is not in standard form
-// and therefore scale should used should not be used to make a quantity without
-// first passing through scale_make
-template <Scale S1, Scale S2>
-struct common_scale {
-    static constexpr std::intmax_t gcd_num = std::gcd(S1::num, S2::num);
-    static constexpr std::intmax_t gcd_den = std::gcd(S1::den, S2::den);
-
-    // Deliberate no use of make_scale to avoid standard form conversion
-    using type = scale<gcd_num, (S1::den / gcd_den) * S2::den,
-                       S1::exp <= S2::exp ? S1::exp : S2::exp>;
-};
-// Short-cut for same scales
-template <Scale S>
-struct common_scale<S, S> : Type<S> {};
-
-}  // namespace detail
-
-// Utility struct to make an non-normalised quantity that two units can be
-// safely converted to and perform conversion.
 template <Unit U1, typename R1, Unit U2, typename R2>
 requires dimension_equal_v<U1, U2> struct common_help {
-   private:
+    // private:
     using S1 = U1::scale_factor;
     using S2 = U2::scale_factor;
 
-   public:
-    using scale = detail::common_scale<S1, S2>::type;
-    using dimension = U1::dimensions;  // == U2::dimension
+    // static constexpr std::intmax_t num = std::gcd(S1::num, S2::num);
+    // static constexpr std::intmax_t den = std::lcm(S1::den, S2::den);
 
-   private:
-    // Using a common quantity and constructors to do the conversion to avoid
-    // division and provide symmetry to operations. Also throws warnings in
-    // case of narrowing conversions in constructors. Bypass unit_make_t to
-    // avoid scale conversion to standard form.
-    //
-    using irreg_unit = detail::unit_make_impl<true, scale, dimension>::type;
+    static constexpr std::intmax_t num = std::gcd(S1::num, S2::num);
+    static constexpr std::intmax_t den = std::lcm(S1::den, S2::den);
+
+    static constexpr std::intmax_t exp =
+        (S1::exp < S2::exp) ? S1::exp : S2::exp;
+
+    // Scale factor that is the greatest common multiple of S1 and S2's
+    // scale factors such that each scale is only scaled up in a conversion.
+    // This avoids integer division where possible. Return scale is not in
+    // standard form and therefore scale should used should not be used to make
+    // a quantity without first passing through scale_make
+    using scale_t = scale<num, den, exp>;
+    using dimension_t = U1::dimensions;  // == U2::dimension
+
+    // Bypass unit_make_t to avoid scale conversion to standard form.
+    using irreg_unit = detail::unit_make_impl<true, scale_t, dimension_t>::type;
     using irreg_quantity = quantity<irreg_unit, std::common_type_t<R1, R2>>;
 
    public:
+    // Using a common quantity and constructors to do the conversion to avoid
+    // division and provide symmetry to operations. Also throws warnings in
+    // case of narrowing conversions in constructors.
     template <typename Quant>
     static constexpr auto conv(Quant x) {
         return irreg_quantity(x).get();
     }
 
-    using unit = downcast_unit<unit_make_t<scale, dimension>>;
+    // Normalised common unit.
+    using unit = downcast_unit<unit_make_t<scale_t, dimension_t>>;
 };
 
 ///////////////////////////////////////////////////////////////////////////////
