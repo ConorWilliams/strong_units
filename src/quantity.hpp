@@ -30,6 +30,7 @@
 #include <compare>
 #endif
 
+#include "math.hpp"
 #include "unit.hpp"
 
 namespace su {
@@ -50,21 +51,15 @@ requires dimension_equal_v<U1, U2> struct common_help {
     using S1 = U1::scale_factor;
     using S2 = U2::scale_factor;
 
-    // static constexpr std::intmax_t num = std::gcd(S1::num, S2::num);
-    // static constexpr std::intmax_t den = std::lcm(S1::den, S2::den);
-
-    static constexpr std::intmax_t num = std::gcd(S1::num, S2::num);
-    static constexpr std::intmax_t den = std::lcm(S1::den, S2::den);
-
-    static constexpr std::intmax_t exp =
-        (S1::exp < S2::exp) ? S1::exp : S2::exp;
+    static constexpr std::array gcd =
+        gcd_frac(S1::num, S1::den, S1::exp, S2::num, S2::den, S2::exp);
 
     // Scale factor that is the greatest common multiple of S1 and S2's
     // scale factors such that each scale is only scaled up in a conversion.
     // This avoids integer division where possible. Return scale is not in
-    // standard form and therefore scale should used should not be used to make
-    // a quantity without first passing through scale_make
-    using scale_t = scale<num, den, exp>;
+    // standard form and therefore scale should not be used to make a quantity
+    // without first passing through scale_make.
+    using scale_t = scale<gcd[0], gcd[1], gcd[2]>;
     using dimension_t = U1::dimensions;  // == U2::dimension
 
     // Bypass unit_make_t to avoid scale conversion to standard form.

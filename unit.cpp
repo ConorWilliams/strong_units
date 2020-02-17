@@ -18,7 +18,7 @@ template <std::intmax_t... Is> struct  luminous_intensity : su::dimension< "cd",
 
 struct    scalar : su::symbol_unit<   scalar,      "scalar",        su::scale<>> {};
 
-struct    metres : su::simple_unit<   metres, su::scale<>,             length<>> {};
+struct    metres : su::simple_unit<   metres, su::scale<2>,             length<>> {};
 struct   seconds : su::simple_unit<  seconds, su::scale<>,               time<>> {};
 struct kilograms : su::simple_unit<kilograms, su::scale<>,               mass<>> {};
 struct   amperes : su::simple_unit<  amperes, su::scale<>,            current<>> {};
@@ -47,8 +47,8 @@ struct   feet : su::symbol_unit<  feet,   "ft", su::scale<3048, 10000>, si::leng
 struct inches : su::scaled_unit<inches, "inch",       su::scale<1, 12>,         feet> {};
 
 //struct tw :  su::scaled_unit<tw, "w12", su::scale<12>,   si::metres> {};
-struct tw : su::symbol_unit<tw, "tw", su::scale<79>, si::length<>> {};
-struct ti : su::symbol_unit<ti, "ti", su::scale<3>, si::length<>> {};
+struct tw : su::symbol_unit<tw, "a", su::scale<1>, si::length<>> {};
+struct ti : su::symbol_unit<ti, "b", su::scale<31415926, 10000000, 0>, si::length<>> {};
 
 // clang-format on
 
@@ -59,37 +59,46 @@ inline constexpr quantity<si::candelas, double> bear_oclock{12.};
 #include <iomanip>
 #include <vector>
 
+#include "src/math.hpp"
+
 int main() {
-    quantity<si::metres> a{1.};
+    quantity<ti> a{1.};
     quantity<tw> b{1.};
 
-    std::cout << (quantity<tw>{1.} + quantity<ti>{1.}) << std::endl;
+    // std::cout << (quantity<tw>{1.} + quantity<ti>{1.}) << std::endl;
 
-    // std::cout << a.symbol() << std::endl;
-    // std::cout << b.base_symbol() << std::endl;
-    //
-    std::cout << quantity<si::metres>{quantity<tw>{1.} + quantity<ti>{1.}};
+    std::cout << a - b << std::endl;
+    std::cout << b + a << std::endl;
+    // //
+    // std::cout << quantity<si::metres>{quantity<tw>{1.} + quantity<ti>{1.}};
 
-    using help = su::common_help<si::metres, double, tw, double>;
+    // using help = su::common_help<si::metres, double, tw, double>;
 
-    std::cout << help::num << '/' << help::den << '^' << help::exp << std::endl;
+    // std::cout << help::num << '/' << help::den << '^' << help::exp <<
+    // std::endl;
 
     // int j = quantity<inches>::unit::scale_factor{};
-    // int i = help::S2{};
+    // int i = decltype(b)::unit::scale_factor{};
 
-    int num1 = 5;
-    int den1 = 1;
-    int Exp1 = -1;
+    // int num1 = 5;
+    // int den1 = 1;
+    // int Exp1 = -1;
 
-    int num2 = 1;
-    int den2 = 1;
-    int Exp2 = 0;
+    // int num2 = 1;
+    // int den2 = 1;
+    // int Exp2 = 0;
 
-    std::intmax_t gcd_num = std::gcd(num1, num2);
-    std::intmax_t gcd_den = std::lcm(den1, den2);
+    // std::intmax_t gcd_num = std::gcd(num1, num2);
+    // std::intmax_t gcd_den = std::lcm(den1, den2);
 
-    std::cout << gcd_num << '/' << gcd_den << "x10^" << std::min(Exp1, Exp2)
-              << std::endl;
+    // constexpr auto t = su::gcdpow(8, 80808, 909);
+
+    // std::cout << "mod time " << su::gcdpow(3, 4, 756) << std::endl;
+
+    // constexpr auto k = su::gcd_frac(25, 909, -2, 1, 6, 0);
+
+    // std::cout << gcd_num << '/' << gcd_den << "x10^" << std::min(Exp1, Exp2)
+    //           << std::endl;
 
     return 0;
 }
