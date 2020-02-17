@@ -107,6 +107,11 @@ constexpr void cwap(std::intmax_t &lhs, std::intmax_t &rhs) {
 // Computes the rational gcd of n1/d1 x 10^e1 and n2/d2 x 10^e2
 constexpr auto gcd_frac(std::intmax_t n1, std::intmax_t d1, std::intmax_t e1,
                         std::intmax_t n2, std::intmax_t d2, std::intmax_t e2) {
+    // Short cut for equal ratios
+    if (n1 == n2 && d1 == d2 && e1 == e2) {
+        return std::array{n1, d1, e2};
+    }
+
     if (e2 > e1) {
         detail::cwap(n1, n2);
         detail::cwap(d1, d2);

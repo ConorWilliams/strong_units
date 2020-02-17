@@ -40,7 +40,7 @@ struct meters_per_second : su::simple_unit<meters_per_second, su::scale<>, lengt
 
 using su::quantity;
 
-struct a : su::symbol_unit<a, "a", su::scale<2, 1, 4>, si::length<>> {};
+struct a : su::symbol_unit<a, "a", su::scale<2>, si::length<>> {};
 struct b : su::symbol_unit<b, "b", su::scale<1, 1, 9>, si::length<>> {};
 
 struct   feet : su::symbol_unit<  feet,   "ft", su::scale<3048, 10000>, si::length<>> {};
@@ -68,7 +68,7 @@ int main() {
     // std::cout << (quantity<tw>{1.} + quantity<ti>{1.}) << std::endl;
 
     std::cout << std::setprecision(30) << a * b << std::endl;
-    std::cout << a / b << std::endl;
+    std::cout << a + a << std::endl;
 
     // using k = su::dimension_pack_simplify_t<si::length<1>, si::length<3>>;
 

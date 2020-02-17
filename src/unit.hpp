@@ -120,7 +120,7 @@ template <Unit U>
 using downcast_unit = detail::downcast_unit_impl<U, downcast<U>>::type;
 
 namespace detail {
-// inheritance injection to change symbol when using named_unit<...> helper
+// Inheritance injection to change symbol when using named_unit<...> helper
 template <auto Name, Unit U>
 struct named_unit : U {
     static constexpr fs::fixed_string m_symbol = Name;
@@ -140,8 +140,8 @@ struct unit_make_impl<false, S, list<Dims...>>
 
 }  // namespace detail
 
-// Makes an unit type from a dimension list<...> by simplifying and sorting it
-// and simplifying the scale.
+// Makes an unit type from a dimension list<...> by sorting it and simplifying
+// the scale.
 template <Scale S, List L>
 using unit_make_t =
     detail::unit_make_impl<ordered_v<L>, scale_make<S::num, S::den, S::exp>,
