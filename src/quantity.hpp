@@ -62,13 +62,9 @@ requires dimension_equal_v<U1, U2> struct common_help {
     using scale_t = scale<gcd[0], gcd[1], gcd[2]>;
     using dimension_t = U1::dimensions;  // == U2::dimension
 
-   public:
-    using rep = std::common_type_t<R1, R2>;
-
-    // private:
     // Bypass unit_make_t to avoid scale conversion to standard form.
     using irreg_unit = detail::unit_make_impl<true, scale_t, dimension_t>::type;
-    using irreg_quantity = quantity<irreg_unit, rep>;
+    using irreg_quantity = quantity<irreg_unit, std::common_type_t<R1, R2>>;
 
    public:
     // Using a common quantity and constructors to do the conversion to avoid
@@ -245,7 +241,7 @@ template <Unit U1, Arithmetic Rep1, Unit U2, Arithmetic Rep2>
     quantity<U2, Rep2> rhs) 
 
     requires dimension_equal_v<U1, U2> && 
-    requires (typename common_help<U1, Rep1, U2, Rep2>::rep value) {
+    requires (std::common_type_t<Rep1, Rep2> value) {
         value % value;
     }
 {

@@ -1,74 +1,36 @@
 #include <iostream>
 
 #include "src/quantity.hpp"
-
-namespace si {
+#include "src/si.hpp"
 
 // TODO : check all pass by value no const
 // TODO : static constexpr in functions
 
-// clang-format off
-template <std::intmax_t... Is> struct              length : su::dimension<  "m", Is...> {};
-template <std::intmax_t... Is> struct                time : su::dimension<  "s", Is...> {};
-template <std::intmax_t... Is> struct                mass : su::dimension< "kg", Is...> {};
-template <std::intmax_t... Is> struct             current : su::dimension<  "A", Is...> {};
-template <std::intmax_t... Is> struct          temprature : su::dimension<  "K", Is...> {};
-template <std::intmax_t... Is> struct           substance : su::dimension<"mol", Is...> {};
-template <std::intmax_t... Is> struct  luminous_intensity : su::dimension< "cd", Is...> {};
-
-struct    scalar : su::symbol_unit<   scalar,      "scalar",        su::scale<>> {};
-
-struct    metres : su::simple_unit<   metres, su::scale<>,             length<>> {};
-struct   seconds : su::simple_unit<  seconds, su::scale<>,               time<>> {};
-struct kilograms : su::simple_unit<kilograms, su::scale<>,               mass<>> {};
-struct   amperes : su::simple_unit<  amperes, su::scale<>,            current<>> {};
-struct    kelvin : su::simple_unit<   kelvin, su::scale<>,         temprature<>> {};
-struct     moles : su::simple_unit<    moles, su::scale<>,          substance<>> {};
-struct  candelas : su::simple_unit< candelas, su::scale<>, luminous_intensity<>> {};
-
-
-struct     hertz : su::symbol_unit<hertz, "Hz", su::scale<>, time<-1>> {};
-
-struct kilometres : su::symbol_unit<kilometres, "km",  su::scale<1, 7, 3>,  length<>> {};
-
-struct meters_per_second : su::simple_unit<meters_per_second, su::scale<>, length<>, time<-1>  > {};
-
-
-}  // namespace si
-
 #include <numeric>
 
 using su::quantity;
-
-struct a : su::symbol_unit<a, "a", su::scale<2>, si::length<>> {};
-struct b : su::symbol_unit<b, "b", su::scale<1, 1, 9>, si::length<>> {};
-
-struct   feet : su::symbol_unit<  feet,   "ft", su::scale<3048, 10000>, si::length<>> {};
-struct inches : su::scaled_unit<inches, "inch",       su::scale<1, 12>,         feet> {};
-
-//struct tw :  su::scaled_unit<tw, "w12", su::scale<12>,   si::metres> {};
-struct tw : su::symbol_unit<tw, "tw", su::scale<1, 2, -1>, si::length<>> {};
-struct ti : su::symbol_unit<ti, "ti", su::scale<3>, si::length<>> {};
-
-// clang-format on
-
-inline constexpr quantity<si::candelas, double> bear_oclock{12.};
-
-// quantity operators
-
-#include <iomanip>
-#include <vector>
-
-#include "src/math.hpp"
+using namespace si;
 
 int main() {
-    quantity<tw, long> a{1};
-    quantity<si::metres, long> b{1};
+    quantity<second> s{1.};
+    quantity<minute> m{1.};
+    quantity<hour> h{1.};
+    quantity<day> d{1.};
+    quantity<year> y{1.};
 
-    // std::cout << (quantity<tw>{1.} + quantity<ti>{1.}) << std::endl;
+    quantity<ohm, int> oh{3};
 
-    std::cout << std::setprecision(30) << a * b << std::endl;
-    std::cout << a + a << std::endl;
+    // int i = decltype(d)::unit::scale_factor{};
+    // int j = decltype(h)::unit::scale_factor{};
+
+    auto [i, j, k] = su::gcd_frac(216, 25, 4, 18, 5, 3);
+
+    std::cout << i << ' ' << j << ' ' << k << std::endl;
+
+    std::cout << (s / oh) << std::endl;
+
+    // std::cout << std::setprecision(30) << a * b << std::endl;
+    // std::cout << a + a << std::endl;
 
     // using k = su::dimension_pack_simplify_t<si::length<1>, si::length<3>>;
 

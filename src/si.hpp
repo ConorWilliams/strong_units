@@ -25,101 +25,106 @@
 #include "unit.hpp"  // clang-format off
 
 // This file is part of the dUnit library and contains a full definition of
-// the SI unit system in sUnit types.
+// the SI unit system in strong_unit types.
 
 namespace si {
 
-#ifndef UNIT_DEFAULT_TYPE
-  #define UNIT_DEFAULT_TYPE double
-#endif
-
-#define UNIT_VALUE_ONE UNIT_DEFAULT_TYPE{1}
-
 // SI 7 base dimensions.
 
-template <std::intmax_t... Is> struct              length : unit::DimensionBase<  "m", Is...> {};
-template <std::intmax_t... Is> struct                time : unit::DimensionBase<  "s", Is...> {};
-template <std::intmax_t... Is> struct                mass : unit::DimensionBase< "kg", Is...> {};
-template <std::intmax_t... Is> struct             current : unit::DimensionBase<  "A", Is...> {};
-template <std::intmax_t... Is> struct          temprature : unit::DimensionBase<  "K", Is...> {};
-template <std::intmax_t... Is> struct              amount : unit::DimensionBase<"mol", Is...> {};
-template <std::intmax_t... Is> struct  luminous_intensity : unit::DimensionBase< "cd", Is...> {};
+template <std::intmax_t... Is> struct              length : su::dimension<  "m", Is... >{};
+template <std::intmax_t... Is> struct                time : su::dimension<  "s", Is... >{};
+template <std::intmax_t... Is> struct                mass : su::dimension< "kg", Is... >{};
+template <std::intmax_t... Is> struct             current : su::dimension<  "A", Is... >{};
+template <std::intmax_t... Is> struct          temprature : su::dimension<  "K", Is... >{};
+template <std::intmax_t... Is> struct           substance : su::dimension<"mol", Is... >{};
+template <std::intmax_t... Is> struct  luminous_intensity : su::dimension< "cd", Is... >{};
 
-// SI base unit types, unit types follow the _t suffix convention
+// Non SI extensions
 
-template <class T> using    meter_t = unit::unit<T, unit::scale<>,              length<>>;
-template <class T> using   second_t = unit::unit<T, unit::scale<>,                time<>>;
-template <class T> using kilogram_t = unit::unit<T, unit::scale<>,                mass<>>;
-template <class T> using   ampere_t = unit::unit<T, unit::scale<>,             current<>>;
-template <class T> using   kelvin_t = unit::unit<T, unit::scale<>,          temprature<>>;
-template <class T> using     mole_t = unit::unit<T, unit::scale<>,              amount<>>;
-template <class T> using  candela_t = unit::unit<T, unit::scale<>,  luminous_intensity<>>;
+template <std::intmax_t... Is> struct         information : su::dimension<  "b", Is... >{};
+template <std::intmax_t... Is> struct               angle : su::dimension<"rad", Is... >{};
 
-// Concepts for SI base dimensions
+// SI base units 
 
-template <unit::Unit T> concept             Length = unit::dimension_equal_v<T,    meter_t<int>>;
-template <unit::Unit T> concept               Time = unit::dimension_equal_v<T,   second_t<int>>;
-template <unit::Unit T> concept               Mass = unit::dimension_equal_v<T, kilogram_t<int>>;
-template <unit::Unit T> concept            Current = unit::dimension_equal_v<T,   ampere_t<int>>;
-template <unit::Unit T> concept         Temprature = unit::dimension_equal_v<T,   kelvin_t<int>>;
-template <unit::Unit T> concept             Amount = unit::dimension_equal_v<T,     mole_t<int>>;
-template <unit::Unit T> concept  LuminousIntensity = unit::dimension_equal_v<T,  candela_t<int>>;
+struct    metre : su::simple_unit<    metre, su::scale<>,             length<> >{};
+struct   second : su::simple_unit<   second, su::scale<>,               time<> >{};
+struct kilogram : su::simple_unit< kilogram, su::scale<>,               mass<> >{};
+struct   ampere : su::simple_unit<   ampere, su::scale<>,            current<> >{};
+struct   kelvin : su::simple_unit<   kelvin, su::scale<>,         temprature<> >{};
+struct     mole : su::simple_unit<     mole, su::scale<>,          substance<> >{};
+struct  candela : su::simple_unit<  candela, su::scale<>, luminous_intensity<> >{};
 
-// SI base unit literal instances
+// Non SI base units
 
-inline constexpr    meter_t<UNIT_DEFAULT_TYPE>    meter {UNIT_VALUE_ONE};
-inline constexpr   second_t<UNIT_DEFAULT_TYPE>   second {UNIT_VALUE_ONE};
-inline constexpr kilogram_t<UNIT_DEFAULT_TYPE> kilogram {UNIT_VALUE_ONE};
-inline constexpr   ampere_t<UNIT_DEFAULT_TYPE>   ampere {UNIT_VALUE_ONE};
-inline constexpr   kelvin_t<UNIT_DEFAULT_TYPE>   kelvin {UNIT_VALUE_ONE};
-inline constexpr     mole_t<UNIT_DEFAULT_TYPE>     mole {UNIT_VALUE_ONE};
-inline constexpr  candela_t<UNIT_DEFAULT_TYPE>  candela {UNIT_VALUE_ONE};
+struct scalar : su::simple_unit< scalar, su::scale<>                >{};
+struct radian : su::simple_unit< radian, su::scale<>,       angle<> >{};
+struct    bit : su::simple_unit<    bit, su::scale<>, information<> >{};
+
+
+// Named SI units
+
+struct steradian : su::symbol_unit< steradian,  "sr", su::scale<>,  angle<2>                                        >{};
+struct     hertz : su::symbol_unit<     hertz,  "Hz", su::scale<>,  time<-1>                                        >{};
+struct   sievert : su::symbol_unit<   sievert,  "Sv", su::scale<>, length<2>,    time<-2>                           >{};
+struct     katal : su::symbol_unit<     katal, "kat", su::scale<>,  time<-1>, substance<>                           >{};
+struct   coulomb : su::symbol_unit<   coulomb,   "C", su::scale<>,    time<>,   current<>                           >{};
+struct    newton : su::symbol_unit<    newton,   "N", su::scale<>,    mass<>,    length<>,    time<-2>              >{};
+struct    pascal : su::symbol_unit<    pascal,  "Pa", su::scale<>,    mass<>,  length<-1>,    time<-2>              >{};
+struct     joule : su::symbol_unit<     joule,   "J", su::scale<>,    mass<>,   length<2>,    time<-2>              >{};
+struct      watt : su::symbol_unit<      watt,   "W", su::scale<>,    mass<>,   length<2>,    time<-3>              >{};
+struct     tesla : su::symbol_unit<     tesla,   "T", su::scale<>,    mass<>,    time<-2>, current<-1>              >{};
+struct      volt : su::symbol_unit<      volt,   "V", su::scale<>,    mass<>,   length<2>,    time<-3>, current<-1> >{};
+struct     farad : su::symbol_unit<     farad,   "F", su::scale<>,  mass<-1>,  length<-2>,     time<4>,  current<2> >{};
+struct       ohm : su::symbol_unit<       ohm,   "Ω", su::scale<>,    mass<>,   length<2>,    time<-3>, current<-2> >{};
+struct   siemens : su::symbol_unit<   siemens,   "S", su::scale<>,  mass<-1>,  length<-2>,     time<3>,  current<2> >{};
+struct     weber : su::symbol_unit<     weber,  "Wb", su::scale<>,    mass<>,   length<2>,    time<-2>, current<-1> >{}; 
+struct     henry : su::symbol_unit<     henry,   "H", su::scale<>,    mass<>,   length<2>,    time<-2>, current<-2> >{};
+
+struct     lumen : su::symbol_unit<     lumen,  "lm", su::scale<>,  angle<2>, luminous_intensity<>             >{};
+struct       lux : su::symbol_unit<       lux,  "lx", su::scale<>,  angle<2>, luminous_intensity<>, length<-2> >{};
+
+// Non SI (approved) named;
+
+struct    minute : su::scaled_unit< minute, "min",  su::scale<60>, second >{};
+struct      hour : su::scaled_unit<   hour,   "h",  su::scale<60>, minute >{};
+struct       day : su::scaled_unit<    day,   "d",  su::scale<24>,   hour >{};
+struct      year : su::scaled_unit<   year,  "yr", su::scale<365>,    day >{};
 
 namespace prefix {
 
-using yotta = unit::scale<24>;
-using zetta = unit::scale<21>;
-using   exa = unit::scale<18>;
-using  peta = unit::scale<15>;
-using  tera = unit::scale<12>;
-using  giga = unit::scale<9>;
-using  mega = unit::scale<6>;
-using  kilo = unit::scale<3>;
-using hecto = unit::scale<2>;
-using  deka = unit::scale<1>;
-using  deci = unit::scale<-1>;
-using centi = unit::scale<-2>;
-using milli = unit::scale<-3>;
-using micro = unit::scale<-6>;
-using  nano = unit::scale<-9>;
-using  pico = unit::scale<-12>;
-using femto = unit::scale<-15>;
-using  atto = unit::scale<-18>;
-using zepto = unit::scale<-21>;
-using yocto = unit::scale<-24>;
+using yotta = su::scale<24>;
+using zetta = su::scale<21>;
+using   exa = su::scale<18>;
+using  peta = su::scale<15>;
+using  tera = su::scale<12>;
+using  giga = su::scale<9>;
+using  mega = su::scale<6>;
+using  kilo = su::scale<3>;
+using hecto = su::scale<2>;
+using  deka = su::scale<1>;
+using  deci = su::scale<-1>;
+using centi = su::scale<-2>;
+using milli = su::scale<-3>;
+using micro = su::scale<-6>;
+using  nano = su::scale<-9>;
+using  pico = su::scale<-12>;
+using femto = su::scale<-15>;
+using  atto = su::scale<-18>;
+using zepto = su::scale<-21>;
+using yocto = su::scale<-24>;
 
-using  kibi = unit::scale_make<1, 1024, 1>;
-using  mebi = unit::scale_multiply_t<kibi, kibi>;
-using  gibi = unit::scale_multiply_t<mebi, kibi>;
-using  tebi = unit::scale_multiply_t<gibi, kibi>;
-using  pebi = unit::scale_multiply_t<tebi, kibi>;
-using  exbi = unit::scale_multiply_t<pebi, kibi>;
-using  zebi = unit::scale_multiply_t<exbi, kibi>;
-using  yobi = unit::scale_multiply_t<zebi, kibi>;
+using  kibi = su::scale_make<1, 1024, 1>;
+using  mebi = su::scale_multiply_t<kibi, kibi>;
+using  gibi = su::scale_multiply_t<mebi, kibi>;
+using  tebi = su::scale_multiply_t<gibi, kibi>;
+using  pebi = su::scale_multiply_t<tebi, kibi>;
+using  exbi = su::scale_multiply_t<pebi, kibi>;
+using  zebi = su::scale_multiply_t<exbi, kibi>;
+using  yobi = su::scale_multiply_t<zebi, kibi>;
 
 } // namespace prefix
 
-// SI named unit types
+} // namespace si
 
-template <class T> using    radian_t = unit::unit_make<T, unit::scale<>>;
-template <class T> using steradian_t = unit::unit_make<T, unit::scale<>>;
-template <class T> using     hertz_t = unit::unit_make<T, unit::scale<>,    time<-1>>;
-template <class T> using    newton_t = unit::unit_make<T, unit::scale<>,    mass<  >, length<  >, time<-2>>;
-template <class T> using    pascal_t = unit::unit_make<T, unit::scale<>,    mass<  >, length<-1>, time<-2>>;
-template <class T> using     joule_t = unit::unit_make<T, unit::scale<>,    mass<  >, length< 2>, time<-2>>;
-template <class T> using      watt_t = unit::unit_make<T, unit::scale<>,    mass<  >, length< 2>, time<-3>>;
-template <class T> using  couloumb_t = unit::unit_make<T, unit::scale<>, current<  >,   time<  >>;
 
-// clang-format on
 
-}  // namespace si

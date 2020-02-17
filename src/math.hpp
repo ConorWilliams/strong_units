@@ -32,7 +32,8 @@ namespace su {
 
 namespace detail {
 
-// Computes (a * b) mod m relies on unsigned integer arithmetic
+// Computes (a * b) mod m relies on unsigned integer arithmetic, should not
+// overflow
 constexpr std::uint64_t mulmod(std::uint64_t a, std::uint64_t b,
                                std::uint64_t m) {
     std::uint64_t res = 0;
@@ -64,7 +65,7 @@ constexpr std::uint64_t mulmod(std::uint64_t a, std::uint64_t b,
     return res;
 }
 
-// Calculates (a ^ e) mod m
+// Calculates (a ^ e) mod m , should not overflow.
 constexpr std::uint64_t modpow(std::uint64_t a, std::uint64_t e,
                                std::uint64_t m) {
     a %= m;
@@ -80,7 +81,7 @@ constexpr std::uint64_t modpow(std::uint64_t a, std::uint64_t e,
     return result;
 }
 
-// gcd(a * 10 ^ e, b)
+// gcd(a * 10 ^ e, b), should not overflow
 constexpr std::intmax_t gcdpow(std::intmax_t a, std::intmax_t e,
                                std::intmax_t b) noexcept {
     assert(a > 0);
@@ -106,7 +107,8 @@ constexpr void cwap(std::intmax_t &lhs, std::intmax_t &rhs) {
 
 // Computes the rational gcd of n1/d1 x 10^e1 and n2/d2 x 10^e2
 constexpr auto gcd_frac(std::intmax_t n1, std::intmax_t d1, std::intmax_t e1,
-                        std::intmax_t n2, std::intmax_t d2, std::intmax_t e2) {
+                        std::intmax_t n2, std::intmax_t d2,
+                        std::intmax_t e2) noexcept {
     // Short cut for equal ratios
     if (n1 == n2 && d1 == d2 && e1 == e2) {
         return std::array{n1, d1, e2};
@@ -120,20 +122,18 @@ constexpr auto gcd_frac(std::intmax_t n1, std::intmax_t d1, std::intmax_t e1,
 
     std::intmax_t exp = e2;  // minimum
 
-    std::intmax_t num = detail::gcdpow(n1, e1 - e2, n2);
+    // gcd(a/b,c/d) = gcd(a⋅d, c⋅b) / b⋅d
 
-    if (d1 < d2) {
-        detail::cwap(d1, d2);
-    }
+    assert(std::numeric_limits<std::intmax_t>::max() / n1 > d2);
+    assert(std::numeric_limits<std::intmax_t>::max() / n2 > d1);
 
-    std::intmax_t tmp = detail::gcdpow(d1, e1 - e2, d2);
+    std::intmax_t num = detail::gcdpow(n1 * d2, e1 - e2, n2 * d1);
 
-    assert(std::numeric_limits<std::intmax_t>::max() / d1 > d2);
-    assert((d1 * d2) % tmp == 0);
+    std::intmax_t den = d1 * d2;
 
-    std::intmax_t den = (d1 * d2) / tmp;
+    std::intmax_t gcd = std::gcd(num, den);
 
-    return std::array{num, den, exp};
+    return std::array{num / gcd, den / gcd, exp};
 }
 
 }  // namespace su
