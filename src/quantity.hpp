@@ -47,14 +47,14 @@ class quantity;
 
 template <Unit U1, typename R1, Unit U2, typename R2>
 requires dimension_equal_v<U1, U2> struct common_help {
-    // private:
+   private:
     using S1 = U1::scale_factor;
     using S2 = U2::scale_factor;
 
     static constexpr std::array gcd =
         gcd_frac(S1::num, S1::den, S1::exp, S2::num, S2::den, S2::exp);
 
-    // Scale factor that is the greatest common multiple of S1 and S2's
+    // Scale factor that is the greatest common divisor of S1 and S2's
     // scale factors such that each scale is only scaled up in a conversion.
     // This avoids integer division where possible. Return scale is not in
     // standard form and therefore scale should not be used to make a quantity
@@ -62,9 +62,13 @@ requires dimension_equal_v<U1, U2> struct common_help {
     using scale_t = scale<gcd[0], gcd[1], gcd[2]>;
     using dimension_t = U1::dimensions;  // == U2::dimension
 
+   public:
+    using rep = std::common_type_t<R1, R2>;
+
+    // private:
     // Bypass unit_make_t to avoid scale conversion to standard form.
     using irreg_unit = detail::unit_make_impl<true, scale_t, dimension_t>::type;
-    using irreg_quantity = quantity<irreg_unit, std::common_type_t<R1, R2>>;
+    using irreg_quantity = quantity<irreg_unit, rep>;
 
    public:
     // Using a common quantity and constructors to do the conversion to avoid
@@ -129,22 +133,22 @@ class quantity {
 
     [[nodiscard]] constexpr quantity operator+() const { return *this; }
 
+    [[nodiscard]] constexpr quantity operator++(int) {
+        return quantity(m_value++);
+    }
+
+    [[nodiscard]] constexpr quantity operator--(int) {
+        return quantity(m_value--);
+    }
+
     constexpr quantity& operator++() {
         ++m_value;
         return *this;
     }
 
-    [[nodiscard]] constexpr quantity operator++(int) {
-        return quantity(m_value++);
-    }
-
     constexpr quantity& operator--() {
         --m_value;
         return *this;
-    }
-
-    [[nodiscard]] constexpr quantity operator--(int) {
-        return quantity(m_value--);
     }
 
     template <Unit U2, Arithmetic Rep2>
@@ -161,7 +165,7 @@ class quantity {
         return *this;
     }
 
-    // modulo follow addition / subtraction rules e.g 4cm % 3cm = 1cm This is
+    // Modulo follow addition / subtraction rules e.g 4cm % 3cm = 1cm This is
     // due to the requirement of the existence of a scalar k such that:
     // k * 3cm + 1cm = 4cm
     template <Unit U2, Arithmetic Rep2>
@@ -241,7 +245,9 @@ template <Unit U1, Arithmetic Rep1, Unit U2, Arithmetic Rep2>
     quantity<U2, Rep2> rhs) 
 
     requires dimension_equal_v<U1, U2> && 
-    requires (std::common_type_t<Rep1, Rep2> x) {x % x;}
+    requires (typename common_help<U1, Rep1, U2, Rep2>::rep value) {
+        value % value;
+    }
 {
     using common = common_help<U1, Rep1, U2, Rep2>;
     using return_rep = decltype(common::conv(lhs) % common::conv(rhs));

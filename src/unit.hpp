@@ -62,7 +62,8 @@ struct unit_tag {};  // marks unit for concept
 
 }  // namespace detail
 
-// Base class representing a general unit.
+// Base class representing a general unit. This is what is displayed for a
+// non-coherent unnamed unit.
 template <Scale S, Dimension... Dims>
 struct nameless : downcast_base<nameless<S, Dims...>>, detail::unit_tag {
    public:
@@ -74,6 +75,10 @@ struct nameless : downcast_base<nameless<S, Dims...>>, detail::unit_tag {
 
     static_assert(ordered_v<dimensions>,
                   "Unit dimensions must satisfy strict ordering.");
+
+    static_assert(
+        std::conjunction_v<std::is_same<Dims, dimension_simplify_t<Dims>>...>,
+        "Unit dimensions must be in standard form.");
 
     // Symbol contains scale info and dimension symbols / exponents.
     static constexpr fs::fixed_string m_base_symbol =
@@ -135,7 +140,7 @@ struct unit_make_impl<false, S, list<Dims...>>
 
 }  // namespace detail
 
-// Makes a unit type from a dimension list<...> by simplifying and sorting it
+// Makes an unit type from a dimension list<...> by simplifying and sorting it
 // and simplifying the scale.
 template <Scale S, List L>
 using unit_make_t =
@@ -146,14 +151,21 @@ using unit_make_t =
 // *                  User access points for making new units                  *
 // *****************************************************************************
 
+// Make a unit with no special symbol (uses base dimension symbols).
 template <typename Target, Scale S, Dimension... Dims>
-struct simple_unit : downcast_child<Target, unit_make_t<S, list<Dims...>>> {};
+struct simple_unit
+    : downcast_child<Target,
+                     unit_make_t<S, dimension_pack_simplify_t<Dims...>>> {};
 
+// Make a unit with a custom symbol.
 template <typename Target, fs::fixed_string Sym, Scale S, Dimension... Dims>
 struct symbol_unit
-    : downcast_child<Target,
-                     detail::named_unit<Sym, unit_make_t<S, list<Dims...>>>> {};
+    : downcast_child<
+          Target,
+          detail::named_unit<
+              Sym, unit_make_t<S, dimension_pack_simplify_t<Dims...>>>> {};
 
+// Make a unit with a custom symbol by rescaling an existing unit.
 template <typename Target, fs::fixed_string Sym, Scale S, Unit U>
 struct scaled_unit
     : downcast_child<
@@ -170,10 +182,10 @@ inline constexpr bool dimension_equal_v<A, B> =
     detail::dimension_equal<typename A::dimensions,
                             typename B::dimensions>::value;
 
-// Dimensionally safe unit conversion but returns raw float, double, etc
-template <Unit From, Unit To>
-[[nodiscard]] constexpr auto raw_convert(
-    auto x) requires dimension_equal_v<From, To> {
+// Dimensionally safe unit conversion.
+template <Unit From, Unit To, typename T>
+[[nodiscard]] constexpr T raw_convert(
+    T x) requires dimension_equal_v<From, To> {
     return scale_convert<typename From::scale_factor,
                          typename To::scale_factor>(x);
 }

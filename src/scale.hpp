@@ -255,7 +255,7 @@ inline constexpr T scale_convert(T x) {
         } else if constexpr (num == 1 && den != 1) {
             return x / static_cast<T>(den);
         } else if constexpr (num != 1 && den != 1) {
-            return x * static_cast<T>(num) / static_cast<T>(den);
+            return (x * static_cast<T>(num)) / static_cast<T>(den);
         }
     } else if constexpr (exp > 0) {
         constexpr T pow10 = detail::pow10<exp, T>();
@@ -265,9 +265,9 @@ inline constexpr T scale_convert(T x) {
         } else if constexpr (num != 1 && den == 1) {
             return x * static_cast<T>(num) * pow10;
         } else if constexpr (num == 1 && den != 1) {
-            return x / static_cast<T>(den) * pow10;
+            return (x * pow10) / static_cast<T>(den);
         } else if constexpr (num != 1 && den != 1) {
-            return x * static_cast<T>(num) / static_cast<T>(den) * pow10;
+            return (x * static_cast<T>(num) * pow10) / static_cast<T>(den);
         }
     } else if constexpr (exp < 0) {
         constexpr T pow10 = detail::pow10<-exp, T>();
@@ -275,11 +275,11 @@ inline constexpr T scale_convert(T x) {
         if constexpr (num == 1 && den == 1) {
             return x / pow10;
         } else if constexpr (num != 1 && den == 1) {
-            return x * static_cast<T>(num) / pow10;
+            return (x * static_cast<T>(num)) / pow10;
         } else if constexpr (num == 1 && den != 1) {
             return x / static_cast<T>(den) / pow10;
         } else if constexpr (num != 1 && den != 1) {
-            return x * static_cast<T>(num) / static_cast<T>(den) / pow10;
+            return (x * static_cast<T>(num)) / static_cast<T>(den) / pow10;
         }
     }
 }

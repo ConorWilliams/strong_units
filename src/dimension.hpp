@@ -137,6 +137,7 @@ struct dimension_simplify<Dim<Is...>, 1, 1> : Type<Dim<>> {};
 }  // namespace detail
 
 // Converts a dimensions into its shortest possible version representation
+
 template <Dimension D>
 using dimension_simplify_t =
     detail::dimension_simplify<D, D::num, D::den>::type;
@@ -251,6 +252,31 @@ template <typename A, typename B>
 
 namespace detail {
 
+// Accumulates results into lhs list
+template <List, Dimension...>
+struct dim_pack_simple_impl;
+
+// End condition
+template <List L>
+struct dim_pack_simple_impl<L> : Type<L> {};
+
+template <List L, Dimension Head, Dimension... Tail>
+struct dim_pack_simple_impl<L, Head, Tail...>
+    : std::conditional_t<
+          Head::num == 0, dim_pack_simple_impl<L, Tail...>,
+          dim_pack_simple_impl<concat_t<L, dimension_simplify_t<Head>>,
+                               Tail...>> {};
+
+}  // namespace detail
+
+// Takes a list of dimensions and converts each to standard form removing any
+// zero exponent dimensions.
+template <Dimension... Dims>
+using dimension_pack_simplify_t =
+    detail::dim_pack_simple_impl<list<>, Dims...>::type;
+
+namespace detail {
+
 // Recursively concatenates A/B into L choosing 'smallest' each time to maintain
 // order, dimensions comparing equal are summed
 template <int, List L, List A, List B>
@@ -294,9 +320,9 @@ struct match<0, L, list<A, As...>, list<B, Bs...>> {
 
     using dim_sum = dimension_add_t<A, typename B::exp>;
 
+    // Ignores dimensions with zero exponent.
     using type = std::conditional_t<
-        std::ratio_equal_v<typename dim_sum::exp, std::ratio<0>>,
-        typename merge<L, list<As...>, list<Bs...>>::type,
+        dim_sum::num == 0, typename merge<L, list<As...>, list<Bs...>>::type,
         typename merge<concat_t<L, dim_sum>, list<As...>, list<Bs...>>::type>;
 };
 

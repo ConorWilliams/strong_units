@@ -1,8 +1,30 @@
+// The MIT License (MIT)
+//
+// Copyright (c) 2020 Conor Williams
+//
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included in
+// all copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+// SOFTWARE.
+
 #pragma once
 
 #include <array>
 #include <cassert>
-#include <cstdint>
+#include <cstdint>  // std::intmax_t
 #include <limits>
 #include <numeric>
 
@@ -58,7 +80,7 @@ constexpr std::uint64_t modpow(std::uint64_t a, std::uint64_t e,
     return result;
 }
 
-// gcd(a * 10 ^ e, b) with k > 0
+// gcd(a * 10 ^ e, b)
 constexpr std::intmax_t gcdpow(std::intmax_t a, std::intmax_t e,
                                std::intmax_t b) noexcept {
     assert(a > 0);
@@ -91,7 +113,7 @@ constexpr auto gcd_frac(std::intmax_t n1, std::intmax_t d1, std::intmax_t e1,
         detail::cwap(e1, e2);
     }
 
-    std::intmax_t exp = e2;
+    std::intmax_t exp = e2;  // minimum
 
     std::intmax_t num = detail::gcdpow(n1, e1 - e2, n2);
 

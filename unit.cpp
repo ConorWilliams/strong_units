@@ -18,7 +18,7 @@ template <std::intmax_t... Is> struct  luminous_intensity : su::dimension< "cd",
 
 struct    scalar : su::symbol_unit<   scalar,      "scalar",        su::scale<>> {};
 
-struct    metres : su::simple_unit<   metres, su::scale<2>,             length<>> {};
+struct    metres : su::simple_unit<   metres, su::scale<>,             length<>> {};
 struct   seconds : su::simple_unit<  seconds, su::scale<>,               time<>> {};
 struct kilograms : su::simple_unit<kilograms, su::scale<>,               mass<>> {};
 struct   amperes : su::simple_unit<  amperes, su::scale<>,            current<>> {};
@@ -47,8 +47,8 @@ struct   feet : su::symbol_unit<  feet,   "ft", su::scale<3048, 10000>, si::leng
 struct inches : su::scaled_unit<inches, "inch",       su::scale<1, 12>,         feet> {};
 
 //struct tw :  su::scaled_unit<tw, "w12", su::scale<12>,   si::metres> {};
-struct tw : su::symbol_unit<tw, "a", su::scale<1>, si::length<>> {};
-struct ti : su::symbol_unit<ti, "b", su::scale<31415926, 10000000, 0>, si::length<>> {};
+struct tw : su::symbol_unit<tw, "tw", su::scale<1, 2, -1>, si::length<>> {};
+struct ti : su::symbol_unit<ti, "ti", su::scale<3>, si::length<>> {};
 
 // clang-format on
 
@@ -62,13 +62,17 @@ inline constexpr quantity<si::candelas, double> bear_oclock{12.};
 #include "src/math.hpp"
 
 int main() {
-    quantity<ti> a{1.};
-    quantity<tw> b{1.};
+    quantity<tw, long> a{1};
+    quantity<si::metres, long> b{1};
 
     // std::cout << (quantity<tw>{1.} + quantity<ti>{1.}) << std::endl;
 
-    std::cout << a - b << std::endl;
-    std::cout << b + a << std::endl;
+    std::cout << std::setprecision(30) << a * b << std::endl;
+    std::cout << a / b << std::endl;
+
+    // using k = su::dimension_pack_simplify_t<si::length<1>, si::length<3>>;
+
+    // int i = k{};
     // //
     // std::cout << quantity<si::metres>{quantity<tw>{1.} + quantity<ti>{1.}};
 
@@ -77,7 +81,7 @@ int main() {
     // std::cout << help::num << '/' << help::den << '^' << help::exp <<
     // std::endl;
 
-    // int j = quantity<inches>::unit::scale_factor{};
+    // int j = help::irreg_quantity{};
     // int i = decltype(b)::unit::scale_factor{};
 
     // int num1 = 5;
