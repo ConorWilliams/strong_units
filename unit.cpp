@@ -11,23 +11,24 @@
 using su::quantity;
 using namespace si;
 
-int main() {
-    quantity<second> s{1.};
-    quantity<minute> m{1.};
-    quantity<hour> h{1.};
-    quantity<day> d{1.};
-    quantity<year> y{1.};
+struct a : su::scaled_unit<a, "a", su::scale<10, 6, -3>, second> {};
+struct b : su::scaled_unit<b, "b", su::scale<1, 1, 1>, second> {};
 
+int main() {
+    quantity<second, int> s{1};
+    quantity<minute, int> m{1};
+    quantity<hour, int> h{1};
+    quantity<day, int> d{1};
+    quantity<year, int> y{1};
     quantity<ohm, int> oh{3};
+
+    quantity<a, int> a{1};
+    quantity<b, int> b{1};
 
     // int i = decltype(d)::unit::scale_factor{};
     // int j = decltype(h)::unit::scale_factor{};
 
-    auto [i, j, k] = su::gcd_frac(216, 25, 4, 18, 5, 3);
-
-    std::cout << i << ' ' << j << ' ' << k << std::endl;
-
-    std::cout << (s / oh) << std::endl;
+    std::cout << (a + b) << std::endl;
 
     // std::cout << std::setprecision(30) << a * b << std::endl;
     // std::cout << a + a << std::endl;

@@ -111,7 +111,7 @@ constexpr auto gcd_frac(std::intmax_t n1, std::intmax_t d1, std::intmax_t e1,
                         std::intmax_t e2) noexcept {
     // Short cut for equal ratios
     if (n1 == n2 && d1 == d2 && e1 == e2) {
-        return std::array{n1, d1, e2};
+        return std::array{n1, d1, e1};
     }
 
     if (e2 > e1) {
@@ -128,6 +128,8 @@ constexpr auto gcd_frac(std::intmax_t n1, std::intmax_t d1, std::intmax_t e1,
     assert(std::numeric_limits<std::intmax_t>::max() / n2 > d1);
 
     std::intmax_t num = detail::gcdpow(n1 * d2, e1 - e2, n2 * d1);
+
+    assert(std::numeric_limits<std::intmax_t>::max() / d1 > d2);
 
     std::intmax_t den = d1 * d2;
 
