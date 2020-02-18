@@ -14,6 +14,29 @@ using namespace si;
 struct a : su::scaled_unit<a, "a", su::scale<10, 6, -3>, second> {};
 struct b : su::scaled_unit<b, "b", su::scale<1, 1, 1>, second> {};
 
+namespace su {
+
+template <typename T>
+struct upcast : Type<T> {};
+
+}  // namespace su
+
+template <>
+struct su::upcast<a::dimensions> : Type<a> {};
+
+template <typename T>
+struct hold {};
+
+template <typename T, typename G>
+struct test {};
+
+test<int, int> j{};
+
+template <int... Is>
+struct data {};
+
+struct want : test<want, data<1, 2>> {};
+
 int main() {
     quantity<second, int> s{1};
     quantity<minute, int> m{1};

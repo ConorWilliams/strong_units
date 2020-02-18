@@ -56,15 +56,11 @@ requires dimension_equal_v<U1, U2> struct common_help {
 
     // Scale factor that is the greatest common divisor of S1 and S2's
     // scale factors such that each scale is only scaled up in a conversion.
-    // This avoids integer division where possible. Return scale is not in
-    // standard form and therefore scale should not be used to make a quantity
-    // without first passing through scale_make.
+    // This avoids integer division where possible.
     using scale_t = scale<gcd[0], gcd[1], gcd[2]>;
-    using dimension_t = U1::dimensions;  // == U2::dimension
 
-    // Bypass unit_make_t to avoid scale conversion to standard form.
-    using irreg_unit = detail::unit_make_impl<true, scale_t, dimension_t>::type;
-    using irreg_quantity = quantity<irreg_unit, std::common_type_t<R1, R2>>;
+    using unit_tmp = unit_make_t<scale_t, typename U1::dimensions>;
+    using quant = quantity<unit_tmp, std::common_type_t<R1, R2>>;
 
    public:
     // Using a common quantity and constructors to do the conversion to avoid
@@ -72,11 +68,11 @@ requires dimension_equal_v<U1, U2> struct common_help {
     // case of narrowing conversions in constructors.
     template <typename Quant>
     static constexpr auto conv(Quant x) {
-        return irreg_quantity(x).get();
+        return quant(x).get();
     }
 
     // Normalised common unit.
-    using unit = downcast_unit<unit_make_t<scale_t, dimension_t>>;
+    using unit = downcast_unit<unit_tmp>;
 };
 
 ///////////////////////////////////////////////////////////////////////////////
