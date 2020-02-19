@@ -36,14 +36,8 @@ struct Type {
     using type = T;
 };
 
-namespace detail {
-
-struct scale_tag {};  // marks class as being of scale type
-
-}  // namespace detail
-
 template <std::intmax_t I = 1, std::intmax_t J = 1, std::intmax_t K = 0>
-struct ScaleBase : private detail::scale_tag {
+struct ScaleBase {
     using ratio = std::ratio<I, J>;
 
     static constexpr std::intmax_t num = ratio::num;
@@ -54,7 +48,12 @@ struct ScaleBase : private detail::scale_tag {
 };
 
 template <typename T>
-concept Scale = std::is_base_of_v<detail::scale_tag, T>;
+concept Scale = requires {
+    typename T::ratio;
+    T::num;
+    T::den;
+    T::exp;
+};
 
 // Using a variadic template instead of defaulted results in shorter types
 
@@ -104,76 +103,36 @@ constexpr auto standard_direction() {
     }
 }
 
-// forward declaration for standard_form_impl
+// forward declaration for standard_form
 template <auto C, std::intmax_t Exp, typename Ratio>
-struct standard_match;
-
-template <std::intmax_t Exp, typename Ratio>
 struct standard_form_impl;
 
+// convert a std::ratio to standard form, returns a struct with num, den, exp
 template <std::intmax_t Exp, typename Ratio>
-struct standard_form_impl
-    : standard_match<standard_direction<Ratio>(), Exp, Ratio> {};
+struct standard_form;
+
+template <std::intmax_t Exp, typename Ratio>
+struct standard_form
+    : standard_form_impl<standard_direction<Ratio>(), Exp, Ratio> {};
 
 // end condition
 template <std::intmax_t Exp, typename Ratio>
-struct standard_match<done, Exp, Ratio> {
-    static constexpr std::intmax_t num = Ratio::num;
-    static constexpr std::intmax_t den = Ratio::den;
-    static constexpr std::intmax_t exp = Exp;
-};
+struct standard_form_impl<done, Exp, Ratio>
+    : scale<Ratio::num, Ratio::den, Exp> {};
 
 template <std::intmax_t Exp, typename Ratio>
-struct standard_match<divide, Exp, Ratio>
-    : standard_form_impl<Exp + 1, std::ratio_divide<Ratio, std::ratio<10>>> {};
+struct standard_form_impl<divide, Exp, Ratio>
+    : standard_form<Exp + 1, std::ratio_divide<Ratio, std::ratio<10>>> {};
 
 template <std::intmax_t Exp, typename Ratio>
-struct standard_match<multiply, Exp, Ratio>
-    : standard_form_impl<Exp - 1, std::ratio_multiply<Ratio, std::ratio<10>>> {
-};
-
-}  // namespace detail
-
-// convert a std::ratio to standard form, returns a struct with num, den, exp
-template <typename Ratio>
-using standard_form = detail::standard_form_impl<0, Ratio>;
-
-namespace detail {
-
-template <std::intmax_t I, std::intmax_t J, std::intmax_t K>
-struct scale_make_impl : Type<scale<I, J, K>> {};
-
-template <std::intmax_t I, std::intmax_t J>
-struct scale_make_impl<I, J, 0> : Type<scale<I, J>> {};
-
-template <std::intmax_t I>
-struct scale_make_impl<I, 1, 0> : Type<scale<I>> {};
-
-template <>
-struct scale_make_impl<1, 1, 0> : Type<scale<>> {};
-
-template <std::intmax_t I, std::intmax_t J, std::intmax_t K>
-struct scale_make_help {
-    using standard = standard_form<std::ratio<I, J>>;
-    using type =
-        scale_make_impl<standard::num, standard::den, K + standard::exp>::type;
-};
-
-}  // namespace detail
-
-// Returns the most minimal possible scale type in standard form, never make a
-// unit from a scale without passing the scale through this function first.
-template <std::intmax_t I = 1, std::intmax_t J = 1, std::intmax_t K = 0>
-using scale_make = detail::scale_make_help<I, J, K>::type;
-
-namespace detail {
+struct standard_form_impl<multiply, Exp, Ratio>
+    : standard_form<Exp - 1, std::ratio_multiply<Ratio, std::ratio<10>>> {};
 
 template <bool, bool, Scale>
 struct scale_denorm_impl;
 
 // Remove any powers of 10 from scale num / den to reduce overflow in upcoming
-// operations. DO-NOT use for making a unit as it will explicitly not be in
-// standard form.
+// operations.
 template <Scale S>
 struct scale_denorm : scale_denorm_impl<S::num % 10 == 0, S::den % 10 == 0, S> {
 };
@@ -192,23 +151,51 @@ struct scale_denorm_impl<false, true, S>
 
 // true, true should not occur as then ratio would not be in simplest form
 
+}  // namespace detail
+
+namespace detail {
+
+template <std::intmax_t I, std::intmax_t J, std::intmax_t K>
+struct scale_make_impl : Type<scale<I, J, K>> {};
+
+template <std::intmax_t I, std::intmax_t J>
+struct scale_make_impl<I, J, 0> : Type<scale<I, J>> {};
+
+template <std::intmax_t I>
+struct scale_make_impl<I, 1, 0> : Type<scale<I>> {};
+
+template <>
+struct scale_make_impl<1, 1, 0> : Type<scale<>> {};
+
+template <std::intmax_t I, std::intmax_t J, std::intmax_t K>
+struct scale_make_help {
+    using standard = standard_form<0, std::ratio<I, J>>;
+    using denormed = scale_denorm<standard>;
+    using type =
+        scale_make_impl<denormed::num, denormed::den, K + denormed::exp>::type;
+};
+
+}  // namespace detail
+
+// Returns the most minimal possible scale type in denormalized standard form,
+// never make a unit from a scale without passing the scale through this
+// function first, It defines an unique representation for all rationales of the
+// form a/b x 10^e
+template <std::intmax_t I = 1, std::intmax_t J = 1, std::intmax_t K = 0>
+using scale_make = detail::scale_make_help<I, J, K>::type;
+
+namespace detail {
+
 template <Scale A, Scale B>
 struct scale_multiply {
-    using A_d = scale_denorm<A>;
-    using B_d = scale_denorm<B>;
-
-    using product =
-        std::ratio_multiply<typename A_d::ratio, typename B_d::ratio>;
-    using type = scale_make<product::num, product::den, A_d::exp + B_d::exp>;
+    using product = std::ratio_multiply<typename A::ratio, typename B::ratio>;
+    using type = scale_make<product::num, product::den, A::exp + B::exp>;
 };
 
 template <Scale A, Scale B>
 struct scale_divide {
-    using A_d = scale_denorm<A>;
-    using B_d = scale_denorm<B>;
-
-    using product = std::ratio_divide<typename A_d::ratio, typename B_d::ratio>;
-    using type = scale_make<product::num, product::den, A_d::exp - B_d::exp>;
+    using product = std::ratio_divide<typename A::ratio, typename B::ratio>;
+    using type = scale_make<product::num, product::den, A::exp - B::exp>;
 };
 
 }  // namespace detail
