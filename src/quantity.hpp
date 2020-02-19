@@ -56,8 +56,8 @@ requires dimension_equal_v<U1, U2> struct common_help {
 
     // Scale factor that is the greatest common divisor of S1 and S2's
     // scale factors such that each scale is only scaled up in a conversion.
-    // This avoids integer division where possible.
-    using scale_t = scale<gcd[0], gcd[1], gcd[2]>;
+    // This avoids integer division.
+    using scale_t = scale_make<gcd[0], gcd[1], gcd[2]>;
 
     using unit_tmp = unit_make_t<scale_t, typename U1::dimensions>;
     using quant = quantity<unit_tmp, std::common_type_t<R1, R2>>;
@@ -71,7 +71,7 @@ requires dimension_equal_v<U1, U2> struct common_help {
         return quant(x).get();
     }
 
-    // Normalised common unit.
+    // Normalised-downcast common unit.
     using unit = downcast_unit<unit_tmp>;
 };
 

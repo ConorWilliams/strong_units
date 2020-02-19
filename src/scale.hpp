@@ -80,7 +80,7 @@ namespace detail {
 enum { multiply, done, divide };
 
 template <typename Ratio>
-constexpr int standard_direction() {
+constexpr auto standard_direction() {
     if constexpr (std::ratio_less_equal_v<Ratio, std::ratio<-10>>) {
         return divide;
     }
@@ -105,7 +105,7 @@ constexpr int standard_direction() {
 }
 
 // forward declaration for standard_form_impl
-template <int C, std::intmax_t Exp, typename Ratio>
+template <auto C, std::intmax_t Exp, typename Ratio>
 struct standard_match;
 
 template <std::intmax_t Exp, typename Ratio>
@@ -117,7 +117,9 @@ struct standard_form_impl
 
 // end condition
 template <std::intmax_t Exp, typename Ratio>
-struct standard_match<done, Exp, Ratio> : Type<Ratio> {
+struct standard_match<done, Exp, Ratio> {
+    static constexpr std::intmax_t num = Ratio::num;
+    static constexpr std::intmax_t den = Ratio::den;
     static constexpr std::intmax_t exp = Exp;
 };
 
@@ -132,8 +134,7 @@ struct standard_match<multiply, Exp, Ratio>
 
 }  // namespace detail
 
-// convert a std::ratio to standard form, returns a struct with ::type = the
-// standard form ratio and ::exp the base 10 exponent.
+// convert a std::ratio to standard form, returns a struct with num, den, exp
 template <typename Ratio>
 using standard_form = detail::standard_form_impl<0, Ratio>;
 
@@ -154,28 +155,60 @@ struct scale_make_impl<1, 1, 0> : Type<scale<>> {};
 template <std::intmax_t I, std::intmax_t J, std::intmax_t K>
 struct scale_make_help {
     using standard = standard_form<std::ratio<I, J>>;
-    using type = scale_make_impl<standard::type::num, standard::type::den,
-                                 K + standard::exp>::type;
+    using type =
+        scale_make_impl<standard::num, standard::den, K + standard::exp>::type;
 };
 
 }  // namespace detail
 
-// Returns the most minimal possible scale type in standard form
+// Returns the most minimal possible scale type in standard form, never make a
+// unit from a scale without passing the scale through this function first.
 template <std::intmax_t I = 1, std::intmax_t J = 1, std::intmax_t K = 0>
 using scale_make = detail::scale_make_help<I, J, K>::type;
 
 namespace detail {
 
+template <bool, bool, Scale>
+struct scale_denorm_impl;
+
+// Remove any powers of 10 from scale num / den to reduce overflow in upcoming
+// operations. DO-NOT use for making a unit as it will explicitly not be in
+// standard form.
+template <Scale S>
+struct scale_denorm : scale_denorm_impl<S::num % 10 == 0, S::den % 10 == 0, S> {
+};
+
+// end condition
+template <Scale S>
+struct scale_denorm_impl<false, false, S> : S {};
+
+template <Scale S>
+struct scale_denorm_impl<true, false, S>
+    : scale_denorm<scale<S::num / 10, S::den, S::exp + 1>> {};
+
+template <Scale S>
+struct scale_denorm_impl<false, true, S>
+    : scale_denorm<scale<S::num, S::den / 10, S::exp - 1>> {};
+
+// true, true should not occur as then ratio would not be in simplest form
+
 template <Scale A, Scale B>
 struct scale_multiply {
-    using product = std::ratio_multiply<typename A::ratio, typename B::ratio>;
-    using type = scale_make<product::num, product::den, A::exp + B::exp>;
+    using A_d = scale_denorm<A>;
+    using B_d = scale_denorm<B>;
+
+    using product =
+        std::ratio_multiply<typename A_d::ratio, typename B_d::ratio>;
+    using type = scale_make<product::num, product::den, A_d::exp + B_d::exp>;
 };
 
 template <Scale A, Scale B>
 struct scale_divide {
-    using product = std::ratio_divide<typename A::ratio, typename B::ratio>;
-    using type = scale_make<product::num, product::den, A::exp - B::exp>;
+    using A_d = scale_denorm<A>;
+    using B_d = scale_denorm<B>;
+
+    using product = std::ratio_divide<typename A_d::ratio, typename B_d::ratio>;
+    using type = scale_make<product::num, product::den, A_d::exp - B_d::exp>;
 };
 
 }  // namespace detail

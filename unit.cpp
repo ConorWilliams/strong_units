@@ -11,8 +11,8 @@
 using su::quantity;
 using namespace si;
 
-struct a : su::scaled_unit<a, "a", su::scale<10, 6, -3>, second> {};
-struct b : su::scaled_unit<b, "b", su::scale<1, 1, 1>, second> {};
+struct a : su::scaled_unit<a, "inch", su::scale<254, 1000>, second> {};
+struct b : su::scaled_unit<b, "yd", su::scale<9144, 1000>, second> {};
 
 namespace su {
 
@@ -51,7 +51,7 @@ int main() {
     // int i = decltype(d)::unit::scale_factor{};
     // int j = decltype(h)::unit::scale_factor{};
 
-    std::cout << (a + b) << std::endl;
+    std::cout << (m * m) << std::endl;
 
     // std::cout << std::setprecision(30) << a * b << std::endl;
     // std::cout << a + a << std::endl;
